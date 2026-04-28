@@ -1382,21 +1382,48 @@
 
   // ── PASSWORD MANAGER ─────────────────────────────────────
   function renderPasswordList() {
-    const list = document.getElementById("pw-list");
+    var list = document.getElementById("pw-list");
     if (!list) return;
     list.innerHTML = "";
-    function makeItem(pw, role, idx) {
-      const li = document.createElement("li");
+
+    function makeItem(pw, role, i) {
+      var li = document.createElement("li");
       li.className = "pw-item";
-      const canDelete = role === "user" ? USER_PASSWORDS.length > 1 : ADMIN_PASSWORDS.length > 1;
-      li.innerHTML =
-        '<span class="pw-label"><span class="pw-value">' + pw + '</span>' +
-        '<span class="pw-role">' + (role === "admin" ? "Admin" : "Guest") + '</span></span>' +
-        (canDelete
-          ? '<button class="pw-delete" onclick="deletePassword('' + role + '',' + idx + ')">REMOVE</button>'
-          : '<span style="font-size:0.5rem;color:#333;letter-spacing:0.1em;">REQUIRED</span>');
+      var canDelete = role === "user" ? USER_PASSWORDS.length > 1 : ADMIN_PASSWORDS.length > 1;
+
+      var labelSpan = document.createElement("span");
+      labelSpan.className = "pw-label";
+
+      var valSpan = document.createElement("span");
+      valSpan.className = "pw-value";
+      valSpan.textContent = pw;
+
+      var roleSpan = document.createElement("span");
+      roleSpan.className = "pw-role";
+      roleSpan.textContent = role === "admin" ? "Admin" : "Guest";
+
+      labelSpan.appendChild(valSpan);
+      labelSpan.appendChild(roleSpan);
+      li.appendChild(labelSpan);
+
+      if (canDelete) {
+        var btn = document.createElement("button");
+        btn.className = "pw-delete";
+        btn.textContent = "REMOVE";
+        btn.onclick = (function(r, idx) {
+          return function() { deletePassword(r, idx); };
+        })(role, i);
+        li.appendChild(btn);
+      } else {
+        var req = document.createElement("span");
+        req.style.cssText = "font-size:0.5rem;color:#333;letter-spacing:0.1em;";
+        req.textContent = "REQUIRED";
+        li.appendChild(req);
+      }
+
       list.appendChild(li);
     }
+
     USER_PASSWORDS.forEach(function(pw, i)  { makeItem(pw, "user",  i); });
     ADMIN_PASSWORDS.forEach(function(pw, i) { makeItem(pw, "admin", i); });
   }

@@ -37,19 +37,20 @@ exports.handler = async function(event) {
     const apiKey  = process.env.NETLIFY_API_KEY;
 
     if (!siteId || !apiKey) {
-      // Env vars not configured — return success for session-only change
-      // The admin panel will update in-memory but changes won't persist
+      // API credentials not set — update works for this session only
       const userList  = (process.env.USER_PASSWORDS  || "duvalsound").split(",").map(p => p.trim());
       const adminList = (process.env.ADMIN_PASSWORDS || "squidlysound").split(",").map(p => p.trim());
-      if (role === "admin") adminList.splice(0, adminList.length, ...updated);
-      else userList.splice(0, userList.length, ...updated);
+      const newUserList  = role === "user"  ? updated : userList;
+      const newAdminList = role === "admin" ? updated : adminList;
       return {
         statusCode: 200,
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           success: true,
           sessionOnly: true,
-          userPasswords: role === "user" ? updated : userList,
-          adminPasswords: role === "admin" ? updated : adminList
+          note: "Session only — set NETLIFY_SITE_ID and NETLIFY_API_KEY to persist changes",
+          userPasswords: newUserList,
+          adminPasswords: newAdminList
         })
       };
     }

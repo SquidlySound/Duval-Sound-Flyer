@@ -22,7 +22,7 @@
     --display: 'Bebas Neue', 'Arial Narrow', Impact, sans-serif;
     --accent: #e63329;
   }
-  body { background: var(--black); color: var(--white); font-family: var(--mono); min-height: 100vh; overflow-x: hidden; }
+  body { background: var(--black); color: var(--white); font-family: var(--mono); min-height: 100vh; overflow: hidden; }
 
   /* ══════════════════════════════════════
      LOCK SCREEN
@@ -117,7 +117,7 @@
   /* ══════════════════════════════════════
      FLYER SCREEN
   ══════════════════════════════════════ */
-  #flyer-screen { display:none; min-height:100vh; flex-direction:column; align-items:center; padding:3rem 1.5rem; position:relative; overflow:hidden; perspective:1200px; }
+  #flyer-screen { display:none; min-height:100vh; flex-direction:column; align-items:center; padding:3rem 1.5rem; position:relative; overflow-y:auto; overflow-x:hidden; perspective:1200px; }
   #flyer-screen {
     --theme-primary: #f5f0e8;
     --theme-accent: #888;
@@ -200,7 +200,7 @@
     display:none; min-height:100vh;
     flex-direction:column; align-items:center;
     padding: 3rem 1.5rem 5rem;
-    position:relative; overflow:hidden;
+    position:relative; overflow-y:auto; overflow-x:hidden;
     background: var(--black);
   }
 
@@ -275,26 +275,6 @@
   .activity-item:last-child { border-bottom:none; }
   .activity-event { color:#888; letter-spacing:0.05em; }
   .activity-time  { color:#444; letter-spacing:0.05em; font-size:0.55rem; }
-
-  /* Upload zone */
-  .upload-zone { border:1px dashed #333; padding:2rem 1rem; text-align:center; cursor:pointer; transition:border-color 0.2s,background 0.2s; position:relative; }
-  .upload-zone:hover, .upload-zone.drag-over { border-color:var(--white); background:rgba(245,240,232,0.03); }
-  .upload-zone input { position:absolute; inset:0; opacity:0; cursor:pointer; width:100%; height:100%; }
-  .upload-icon { font-size:2rem; margin-bottom:0.75rem; display:block; }
-  .upload-text { font-size:0.7rem; letter-spacing:0.15em; color:#666; text-transform:uppercase; line-height:2; }
-  .upload-text strong { color:var(--white); display:block; font-size:0.8rem; }
-  .upload-preview-wrap { display:none; margin-top:1rem; }
-  #upload-preview { width:100%; display:block; border:1px solid #333; }
-  .upload-actions { display:flex; gap:0.75rem; margin-top:1rem; }
-  .btn { font-family:'Bebas Neue','Arial Narrow',Impact,sans-serif; font-size:1.1rem; letter-spacing:0.15em; padding:0.7rem 1.2rem; cursor:pointer; border:none; transition:opacity 0.15s,transform 0.1s; flex:1; }
-  .btn:active { transform:scale(0.97); }
-  .btn-primary { background:var(--white); color:var(--black); }
-  .btn-primary:hover { opacity:0.88; }
-  .btn-ghost { background:transparent; color:var(--white); border:1px solid #333; font-family:'Space Mono','Courier New',monospace; font-size:0.7rem; letter-spacing:0.1em; }
-  .btn-ghost:hover { border-color:var(--white); }
-  #replace-status { margin-top:0.75rem; font-size:0.65rem; letter-spacing:0.15em; text-transform:uppercase; text-align:center; display:none; }
-  #replace-status.success { color:#2ecc71; }
-  #replace-status.error   { color:#e63329; }
 
   /* Password manager */
   .pw-list { list-style:none; margin-bottom:1rem; }
@@ -430,29 +410,7 @@
 
   </div>
 
-  <!-- Flyer Upload -->
-  <div class="admin-section fade-in">
-    <div class="section-label">// Replace Flyer</div>
-    <div class="upload-zone" id="upload-zone">
-      <input type="file" id="flyer-upload" accept="image/*" onchange="handleFlyerUpload(event)">
-      <span class="upload-icon">&#8679;</span>
-      <div class="upload-text">
-        <strong>Tap to choose image</strong>
-        JPG, PNG, WEBP &mdash; any size
-      </div>
-    </div>
-    <div class="upload-preview-wrap" id="upload-preview-wrap">
-      <img id="upload-preview" alt="New flyer preview">
-      <div class="upload-actions">
-        <button class="btn btn-primary" onclick="applyNewFlyer()">APPLY &amp; DOWNLOAD</button>
-        <button class="btn btn-ghost" onclick="cancelUpload()">CANCEL</button>
-      </div>
-    </div>
-    <div id="replace-status"></div>
-    <p style="margin-top:1rem;font-size:0.6rem;letter-spacing:0.1em;color:#444;line-height:1.8;">Applying a new flyer downloads both an updated <strong style="color:#666">index.html</strong> and a new <strong style="color:#666">flyer.png</strong>. Upload both to your GitHub repo to go live.</p>
-  </div>
-
-  <!-- Password Manager -->
+    <!-- Password Manager -->
   <div class="admin-section fade-in">
     <div class="section-label">// Password Manager</div>
     <ul class="pw-list" id="pw-list"></ul>
@@ -799,6 +757,7 @@
       setTimeout(function() {
         document.getElementById("lock-screen").style.display = "none";
         document.getElementById("admin-screen").style.display = "flex";
+        document.body.style.overflow = "auto";
         renderAdminStats();
         renderPasswordList();
       }, 400);
@@ -809,6 +768,7 @@
       setTimeout(function() {
         document.getElementById("lock-screen").style.display = "none";
         document.getElementById("flyer-screen").style.display = "flex";
+        document.body.style.overflow = "auto";
         startFlyerGlitch();
       }, 400);
     } else {
@@ -832,6 +792,7 @@
       document.getElementById('flyer-screen').classList.remove('fade-out');
       document.getElementById('lock-screen').style.display = 'flex';
       document.getElementById('lock-screen').classList.remove('fade-out');
+      document.body.style.overflow = 'hidden';
       document.getElementById('password-input').value = '';
       document.getElementById('error-msg').classList.remove('show');
       document.getElementById('attempt-counter').textContent = '';
@@ -1104,7 +1065,6 @@
     skylineCanvas.height = window.innerHeight;
   }
 
-
   // Project a 3D point [x,y,z] to screen [sx,sy,depth_factor]
   function project(x, y, z, cam) {
     const dx = x - cam.x;
@@ -1290,54 +1250,7 @@
   }
 
   // ── FLYER UPLOAD ─────────────────────────────────────────
-  let pendingFlyerSrc = null;
 
-  const uploadZone = document.getElementById("upload-zone");
-  if (uploadZone) {
-    uploadZone.addEventListener("dragover", function(e){ e.preventDefault(); uploadZone.classList.add("drag-over"); });
-    uploadZone.addEventListener("dragleave", function(){ uploadZone.classList.remove("drag-over"); });
-    uploadZone.addEventListener("drop", function(e){
-      e.preventDefault(); uploadZone.classList.remove("drag-over");
-      const file = e.dataTransfer.files[0];
-      if (file && file.type.startsWith("image/")) processFile(file);
-    });
-  }
-
-  function handleFlyerUpload(e) {
-    const file = e.target.files[0];
-    if (file) processFile(file);
-  }
-  function processFile(file) {
-    const reader = new FileReader();
-    reader.onload = function(ev) {
-      pendingFlyerSrc = ev.target.result;
-      document.getElementById("upload-preview").src = pendingFlyerSrc;
-      document.getElementById("upload-preview-wrap").style.display = "block";
-      document.getElementById("replace-status").style.display = "none";
-    };
-    reader.readAsDataURL(file);
-  }
-  function cancelUpload() {
-    pendingFlyerSrc = null;
-    document.getElementById("upload-preview-wrap").style.display = "none";
-    document.getElementById("flyer-upload").value = "";
-  }
-  function applyNewFlyer() {
-    if (!pendingFlyerSrc) return;
-    applyFlyerSrc(pendingFlyerSrc);
-    try { buildMirrorBg(); } catch(e) {}
-    downloadUpdatedHTML();
-    pendingFlyerSrc = null;
-    document.getElementById("upload-preview-wrap").style.display = "none";
-    document.getElementById("flyer-upload").value = "";
-    const status = document.getElementById("replace-status");
-    status.textContent = "✓ Downloading index.html + flyer.png — upload both to GitHub";
-    status.className = "success";
-    status.style.display = "block";
-    setTimeout(function(){ status.style.display = "none"; }, 8000);
-  }
-
-  // ── DOWNLOAD UPDATED HTML ─────────────────────────────────
   function downloadUpdatedHTML() {
     try {
       var fullHTML = document.documentElement.outerHTML;

@@ -1387,7 +1387,8 @@
         if (data.adminPasswords) ADMIN_PASSWORDS = data.adminPasswords;
         document.getElementById("pw-new-val").value = "";
         renderPasswordList();
-        showPwStatus("Added: " + val + " (" + (role === "admin" ? "Admin" : "Guest") + ")", true);
+        var msg = "Added: " + val + (data.sessionOnly ? " (session only — set API key to persist)" : "");
+        showPwStatus(msg, true);
       } else {
         showPwStatus(data.error || "Failed to add", false);
       }
@@ -1409,7 +1410,8 @@
         if (data.userPasswords)  USER_PASSWORDS  = data.userPasswords;
         if (data.adminPasswords) ADMIN_PASSWORDS = data.adminPasswords;
         renderPasswordList();
-        showPwStatus("Password removed", true);
+        var msg = data.sessionOnly ? "Removed (session only — set API key to persist)" : "Password removed";
+        showPwStatus(msg, true);
       } else {
         showPwStatus(data.error || "Cannot remove last password", false);
       }

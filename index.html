@@ -610,14 +610,15 @@
     } catch(e) {}
     // Log to Google Sheets via Netlify function (fire and forget)
     try {
+      var now = new Date();
+      var tzOffset = now.getTimezoneOffset(); // minutes behind UTC (EDT=240, EST=300)
       fetch("/.netlify/functions/log-event", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           type: type,
-          timestamp: new Date().toISOString(),
-          date: new Date().toLocaleDateString([], { month:"short", day:"numeric", year:"numeric" }),
-          time: new Date().toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" })
+          timestamp: now.toISOString(),
+          tzOffset: tzOffset
         })
       });
     } catch(e) {}

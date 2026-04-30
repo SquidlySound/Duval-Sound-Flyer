@@ -429,6 +429,10 @@
     <div class="flyer-container">
       <img id="flyer-img" alt="Duval Sound and Friends Flyer">
     </div>
+    <!-- Console message display -->
+    <div id="console-wrap">
+      <div id="console-lines"></div>
+    </div>
   </div>
 </div>
 
@@ -504,6 +508,16 @@
   </div>
 
   
+
+  <!-- Message Board -->
+  <div class="admin-section fade-in">
+    <div class="section-label">// Guest Message</div>
+    <p style="font-size:0.6rem;letter-spacing:0.1em;color:#555;line-height:1.8;margin-bottom:1rem;">Displayed below the flyer as animated console text. Use new lines for multiple lines. Leave blank to hide.</p>
+    <textarea class="msg-textarea" id="msg-textarea" placeholder="Enter message for guests..." maxlength="500" oninput="updateMsgCount()"></textarea>
+    <div class="msg-char-count"><span id="msg-count">0</span>/500</div>
+    <button class="msg-save-btn" onclick="saveMessage()">SAVE MESSAGE</button>
+    <div id="msg-status"></div>
+  </div>
 
   <div class="admin-footer fade-in">
     <button class="btn-logout" onclick="logout()">&#8592; Exit Admin</button>
@@ -757,6 +771,28 @@
 
     // ── FLYER CARD glow uses accent ─────────────────────────────
     fs.style.setProperty("--theme-glow", "rgba(" + accStr + ",0.3)");
+    // ── CONSOLE MESSAGE colors — high contrast against bg ──────
+    (function() {
+      // Background: dark version of dominant
+      const bgDark = darken(dom, 0.75);
+      // Text: light version of dominant — ensure readable
+      const textBright = lighten(dom, 0.75);
+      const textBri = 0.299*textBright.r + 0.587*textBright.g + 0.114*textBright.b;
+      // If text is too similar to bg, use white
+      const bgBri = 0.299*bgDark.r + 0.587*bgDark.g + 0.114*bgDark.b;
+      const contrast = Math.abs(textBri - bgBri);
+      const finalText = contrast > 80 ? textBright : { r:245, g:240, b:232 };
+      const accent = lighten(acc, 0.55);
+      const cw = document.getElementById("console-wrap");
+      if (cw) {
+        cw.style.setProperty("--console-bg",     "rgba(" + bgDark.r + "," + bgDark.g + "," + bgDark.b + ",0.82)");
+        cw.style.setProperty("--console-text",   "rgb("  + finalText.r + "," + finalText.g + "," + finalText.b + ")");
+        cw.style.setProperty("--console-accent",  "rgb("  + accent.r + "," + accent.g + "," + accent.b + ")");
+        cw.style.setProperty("--console-border",  "rgba(" + accent.r + "," + accent.g + "," + accent.b + ",0.35)");
+        cw.style.setProperty("--console-glow",    "rgba(" + accent.r + "," + accent.g + "," + accent.b + ",0.12)");
+      }
+    })();
+
     // Update skyline wireframe color — contrast-aware
     // Pick the most visible color: accent boosted, or invert if too dark/light
     (function() {
@@ -1394,6 +1430,115 @@
     }
 
     requestAnimationFrame(skylineLoop);
+  }
+
+    // ── GUEST MESSAGE SYSTEM ─────────────────────────────────────
+  var currentMessage = "";
+
+  function loadMessage() {
+    fetch("/.netlify/functions/get-message")
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data && data.message !== undefined) {
+          currentMessage = data.message;
+          renderConsoleMessage(data.message);
+          // Populate admin textarea if on admin screen
+          var ta = document.getElementById("msg-textarea");
+          if (ta) { ta.value = data.message; updateMsgCount(); }
+        }
+      })
+      .catch(function() {});
+  }
+
+  function renderConsoleMessage(text) {
+    var wrap = document.getElementById("console-wrap");
+    var linesEl = document.getElementById("console-lines");
+    if (!wrap || !linesEl) return;
+    linesEl.innerHTML = "";
+    if (!text || !text.trim()) {
+      wrap.style.display = "none";
+      return;
+    }
+    wrap.style.display = "block";
+    var lines = text.split("\n").filter(function(l) { return l.trim(); });
+    // Animate each line in sequence
+    lines.forEach(function(line, i) {
+      var lineEl = document.createElement("div");
+      lineEl.className = "console-line";
+      var prompt = document.createElement("span");
+      prompt.className = "console-prompt";
+      prompt.textContent = ">";
+      var textNode = document.createElement("span");
+      textNode.textContent = line;
+      lineEl.appendChild(prompt);
+      lineEl.appendChild(textNode);
+      // Add blinking cursor to last line
+      if (i === lines.length - 1) {
+        var cursor = document.createElement("span");
+        cursor.className = "console-cursor";
+        lineEl.appendChild(cursor);
+      }
+      linesEl.appendChild(lineEl);
+      // Stagger appearance
+      setTimeout(function() {
+        lineEl.classList.add("visible");
+      }, 400 + i * 600);
+    });
+  }
+
+  function loadAdminMessage() {
+    fetch("/.netlify/functions/get-message")
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        var ta = document.getElementById("msg-textarea");
+        if (ta && data && data.message !== undefined) {
+          ta.value = data.message;
+          updateMsgCount();
+        }
+      })
+      .catch(function() {});
+  }
+
+    function saveMessage() {
+    var text = document.getElementById("msg-textarea").value;
+    var statusEl = document.getElementById("msg-status");
+    var btn = document.querySelector(".msg-save-btn");
+    btn.textContent = "SAVING...";
+    btn.disabled = true;
+    fetch("/.netlify/functions/set-message", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: text })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      btn.textContent = "SAVE MESSAGE";
+      btn.disabled = false;
+      if (data.success) {
+        currentMessage = text;
+        statusEl.textContent = "✓ Message saved";
+        statusEl.className = "ok";
+        statusEl.style.display = "block";
+        setTimeout(function() { statusEl.style.display = "none"; }, 3000);
+      } else {
+        statusEl.textContent = "✗ " + (data.error || "Save failed");
+        statusEl.className = "err";
+        statusEl.style.display = "block";
+      }
+    })
+    .catch(function() {
+      btn.textContent = "SAVE MESSAGE";
+      btn.disabled = false;
+      statusEl.textContent = "✗ Connection error";
+      statusEl.className = "err";
+      statusEl.style.display = "block";
+    });
+  }
+
+  function updateMsgCount() {
+    var ta = document.getElementById("msg-textarea");
+    var ct = document.getElementById("msg-count");
+    if (ta && ct) ct.textContent = ta.value.length;
   }
 
     function startFlyerGlitch(){

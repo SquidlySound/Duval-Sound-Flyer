@@ -409,6 +409,16 @@
         <div class="stat-label">Unlock Rate</div>
         <div class="stat-delta">&nbsp;</div>
       </div>
+      <div class="stat-cell">
+        <div class="stat-value" id="stat-unique">0</div>
+        <div class="stat-label">Unique Visitors</div>
+        <div class="stat-delta" id="stat-unique-today">+0 today</div>
+      </div>
+      <div class="stat-cell">
+        <div class="stat-value" id="stat-unique-unlocks">0</div>
+        <div class="stat-label">Unique Unlocks</div>
+        <div class="stat-delta">&nbsp;</div>
+      </div>
     </div>
     <div class="chart-wrap">
       <div class="chart-bars" id="chart-bars"></div>
@@ -513,7 +523,7 @@
       if (!s.weekChart) s.weekChart = {};
       s.weekChart[today] = (s.weekChart[today] || 0) + (type === "view" ? 1 : 0);
       saveStats(s);
-    } catch(e) {} // never let stats crash the page
+    } catch(e) {}
     // Fire GA custom event
     try {
       if (typeof gtag === "function") {
@@ -521,6 +531,19 @@
         if (type === "unlock") gtag("event", "flyer_unlock", { event_category: "engagement" });
         if (type === "fail")   gtag("event", "flyer_fail",   { event_category: "engagement" });
       }
+    } catch(e) {}
+    // Log to Google Sheets via Netlify function (fire and forget)
+    try {
+      fetch("/.netlify/functions/log-event", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: type,
+          timestamp: new Date().toISOString(),
+          date: new Date().toLocaleDateString([], { month:"short", day:"numeric", year:"numeric" }),
+          time: new Date().toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" })
+        })
+      });
     } catch(e) {}
   }
 
@@ -873,6 +896,7 @@
 
   // ── ADMIN STATS RENDER ────────────────────────────────────
   function renderAdminStats() {
+    // Show local stats immediately
     const s = loadStats();
     document.getElementById("stat-views").textContent   = s.views;
     document.getElementById("stat-unlocks").textContent = s.unlocks;
@@ -883,6 +907,26 @@
     document.getElementById("stat-rate").textContent = rate + "%";
     renderChart(s.weekChart || {});
     renderActivity(s.history || []);
+
+    // Then fetch live totals from Google Sheets
+    fetch("/.netlify/functions/get-stats")
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (!data || data.error) return;
+        document.getElementById("stat-views").textContent   = data.views   || s.views;
+        document.getElementById("stat-unlocks").textContent = data.unlocks || s.unlocks;
+        document.getElementById("stat-fails").textContent   = data.fails   || s.fails;
+        document.getElementById("stat-today").textContent   = "+" + (data.todayViews   || s.todayViews)   + " today";
+        document.getElementById("stat-unlocks-today").textContent = "+" + (data.todayUnlocks || s.todayUnlocks) + " today";
+        const liveRate = (data.views||0) > 0 ? Math.round(((data.unlocks||0) / (data.views||0)) * 100) : 0;
+        document.getElementById("stat-rate").textContent = liveRate + "%";
+        if (data.uniqueVisitors  !== undefined) document.getElementById("stat-unique").textContent         = data.uniqueVisitors;
+        if (data.uniqueUnlockers !== undefined) document.getElementById("stat-unique-unlocks").textContent = data.uniqueUnlockers;
+        if (data.todayUniqueVisitors !== undefined) document.getElementById("stat-unique-today").textContent = "+" + data.todayUniqueVisitors + " today";
+        if (data.weekChart)    renderChart(data.weekChart);
+        if (data.recentEvents) renderActivity(data.recentEvents);
+      })
+      .catch(function() {}); // silently fail — local stats still shown
   }
 
   function renderChart(weekChart) {
@@ -926,7 +970,8 @@
     history.slice(0,10).forEach(function(h) {
       const li = document.createElement("li");
       li.className = "activity-item";
-      li.innerHTML = "<span class='activity-event'>" + (labels[h.type]||h.type) + "</span>" +
+      const ipTag = h.ip && h.ip !== "—" ? " <span style='color:#444;font-size:0.5rem;letter-spacing:0.1em;'>·" + h.ip + "</span>" : "";
+      li.innerHTML = "<span class='activity-event'>" + (labels[h.type]||h.type) + ipTag + "</span>" +
                      "<span class='activity-time'>" + h.date + " " + h.time + "</span>";
       list.appendChild(li);
     });
@@ -1066,32 +1111,24 @@
   }
 
   // ══════════════════════════════════════════════════════════════
-  // JACKSONVILLE SKYLINE — 3D FLYTHROUGH ENGINE
-  // Camera orbits above the St. Johns River, banking through the
-  // skyline as if you're on approach to JAX from the south.
+  // JAX SKYLINE — PS2-style grid mesh on every building face
+  // Each face is a grid of squares like Spider-Man PS2
   // ══════════════════════════════════════════════════════════════
 
-  // Normalized skyline profile [x 0-1, height 0-1]
-  // Modeled after the actual JAX downtown silhouette
   const JAX_BUILDINGS = [
-    // [x-center, width, height, floors] — all normalized 0-1
     { x:0.08,  w:0.03, h:0.12 },
     { x:0.12,  w:0.02, h:0.18 },
     { x:0.16,  w:0.025,h:0.22 },
     { x:0.20,  w:0.03, h:0.28 },
     { x:0.24,  w:0.02, h:0.20 },
-    // Riverplace Tower (distinctive notched top)
-    { x:0.29,  w:0.025,h:0.55, notch:true },
+    { x:0.29,  w:0.025,h:0.55, antenna:true },
     { x:0.33,  w:0.02, h:0.30 },
     { x:0.37,  w:0.03, h:0.38 },
     { x:0.40,  w:0.02, h:0.25 },
-    // Wells Fargo Center
     { x:0.44,  w:0.03, h:0.62, antenna:true },
     { x:0.47,  w:0.025,h:0.42 },
-    // Bank of America Tower — tallest
     { x:0.51,  w:0.03, h:0.88, antenna:true, stepped:true },
     { x:0.54,  w:0.025,h:0.55 },
-    // VyStar / SunTrust
     { x:0.58,  w:0.03, h:0.72, antenna:true },
     { x:0.62,  w:0.025,h:0.48 },
     { x:0.65,  w:0.02, h:0.35 },
@@ -1103,11 +1140,9 @@
     { x:0.88,  w:0.02, h:0.08 },
   ];
 
-  // Ground plane grid (St. Johns River + streets)
-  const GRID_COLS = 20;
-  const GRID_ROWS = 14;
-
-  let skyR = 40, skyG = 200, skyB = 220; // default cyan — updated by color extraction
+  const GRID_COLS = 24;
+  const GRID_ROWS = 16;
+  let skyR = 200, skyG = 200, skyB = 220;
   let skylineCanvas = null, skyCtx = null;
   let skyT = 0;
   let skyRunning = false;
@@ -1118,341 +1153,198 @@
     resizeSkyline();
     window.addEventListener('resize', resizeSkyline);
   }
-
   function resizeSkyline() {
     if (!skylineCanvas) return;
     skylineCanvas.width  = window.innerWidth;
     skylineCanvas.height = window.innerHeight;
   }
+  function updateSkylineColor(r, g, b) { skyR = r; skyG = g; skyB = b; }
 
-  // Project a 3D point [x,y,z] to screen [sx,sy,depth_factor]
   function project(x, y, z, cam) {
-    const dx = x - cam.x;
-    const dy = y - cam.y;
-    const dz = z - cam.z;
-    // Rotate around Y axis (yaw)
-    const cosY = Math.cos(cam.yaw), sinY = Math.sin(cam.yaw);
-    const rx =  dx * cosY + dz * sinY;
-    const rz = -dx * sinY + dz * cosY;
-    // Rotate around X axis (pitch)
-    const cosX = Math.cos(cam.pitch), sinX = Math.sin(cam.pitch);
-    const ry2 = dy * cosX - rz * sinX;
-    const rz2 = dy * sinX + rz * cosX;
-    if (rz2 <= 0.1) return null; // behind camera
-    const fov  = Math.min(skylineCanvas.width, skylineCanvas.height) * 0.9;
-    const sx   = (rx / rz2) * fov + skylineCanvas.width  / 2;
-    const sy   = (ry2/ rz2) * fov + skylineCanvas.height / 2;
-    const df   = 1 / (1 + rz2 * 0.012); // depth fade factor
-    return [sx, sy, df, rz2];
+    var dx = x - cam.x, dy = y - cam.y, dz = z - cam.z;
+    var cy = Math.cos(cam.yaw),   sy = Math.sin(cam.yaw);
+    var cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch);
+    var rx  =  dx * cy + dz * sy;
+    var rz  = -dx * sy + dz * cy;
+    var ry2 =  dy * cp - rz * sp;
+    var rz2 =  dy * sp + rz * cp;
+    if (rz2 <= 0.5) return null;
+    var fov = Math.min(skylineCanvas.width, skylineCanvas.height) * 0.9;
+    var sx  = (rx / rz2) * fov + skylineCanvas.width  / 2;
+    var sy2 = (ry2/ rz2) * fov + skylineCanvas.height / 2;
+    return [sx, sy2, rz2];
   }
 
-  function drawLine3D(ax,ay,az, bx,by,bz, cam, alpha, lw) {
-    const pa = project(ax,ay,az,cam);
-    const pb = project(bx,by,bz,cam);
+  // Draw a single line segment in 3D
+  function line3D(ax,ay,az, bx,by,bz, cam, alpha, lw) {
+    var pa = project(ax,ay,az,cam), pb = project(bx,by,bz,cam);
     if (!pa || !pb) return;
-    const df = (pa[3] + pb[3]) * 0.5;
-    const fade = Math.max(0.02, Math.min(1, 1/(1+df*0.008)));
+    var avgD = (pa[2]+pb[2])*0.5;
+    var fade = Math.max(0, Math.min(1, 1-(avgD-1)/320));
+    var a = alpha * fade;
+    if (a < 0.008) return;
     skyCtx.beginPath();
-    skyCtx.strokeStyle = 'rgba('+skyR+','+skyG+','+skyB+','+(alpha*fade)+')';
-    skyCtx.lineWidth = lw * (0.4 + fade * 0.8);
+    skyCtx.strokeStyle = 'rgba('+skyR+','+skyG+','+skyB+','+a+')';
+    skyCtx.lineWidth = lw * Math.max(0.3, fade);
     skyCtx.moveTo(pa[0], pa[1]);
     skyCtx.lineTo(pb[0], pb[1]);
     skyCtx.stroke();
+  }
+
+  // Draw a grid-meshed rectangular face in 3D
+  // p1..p4 are the four corners [x,y,z] going around the face
+  // gridU = subdivisions along u axis, gridV = subdivisions along v axis
+  function meshFace(p1, p2, p3, p4, cam, alpha, gridU, gridV) {
+    // p1=top-left, p2=top-right, p3=bottom-right, p4=bottom-left
+    // Draw grid lines along U
+    for (var i = 0; i <= gridU; i++) {
+      var t = i / gridU;
+      // Interpolate top edge p1->p2 and bottom edge p4->p3
+      var tx0 = p1[0] + (p2[0]-p1[0])*t, ty0 = p1[1] + (p2[1]-p1[1])*t, tz0 = p1[2] + (p2[2]-p1[2])*t;
+      var tx1 = p4[0] + (p3[0]-p4[0])*t, ty1 = p4[1] + (p3[1]-p4[1])*t, tz1 = p4[2] + (p3[2]-p4[2])*t;
+      line3D(tx0,ty0,tz0, tx1,ty1,tz1, cam, alpha, 0.5);
+    }
+    // Draw grid lines along V
+    for (var j = 0; j <= gridV; j++) {
+      var s = j / gridV;
+      // Interpolate left edge p1->p4 and right edge p2->p3
+      var sx0 = p1[0] + (p4[0]-p1[0])*s, sy0 = p1[1] + (p4[1]-p1[1])*s, sz0 = p1[2] + (p4[2]-p1[2])*s;
+      var sx1 = p2[0] + (p3[0]-p2[0])*s, sy1 = p2[1] + (p3[1]-p2[1])*s, sz1 = p2[2] + (p3[2]-p2[2])*s;
+      line3D(sx0,sy0,sz0, sx1,sy1,sz1, cam, alpha, 0.5);
+    }
+  }
+
+  // Draw one building as a PS2-style grid mesh box
+  function drawMeshBuilding(b, cam) {
+    var CITY_W = 380, CITY_Z = 0, MAX_H = 200, BASE_Y = 40, DEPTH_W = 28;
+    var bx   = (b.x - 0.5) * CITY_W;
+    var bw   = b.w * CITY_W;
+    var bh   = b.h * MAX_H;
+    var topY = BASE_Y - bh;
+    var bz0  = CITY_Z - DEPTH_W/2;
+    var bz1  = CITY_Z + DEPTH_W/2;
+    var bx0  = bx - bw/2;
+    var bx1  = bx + bw/2;
+
+    // Grid density — more grid lines on taller buildings
+    var gridH = Math.max(2, Math.round(b.h * 14));
+    var gridW = Math.max(2, Math.round(b.w * 12));
+    var gridD = 3;
+    var alpha = 0.5;
+
+    // Front face (bz0): corners top-left, top-right, bot-right, bot-left
+    meshFace(
+      [bx0, topY, bz0], [bx1, topY, bz0],
+      [bx1, BASE_Y, bz0], [bx0, BASE_Y, bz0],
+      cam, alpha, gridW, gridH
+    );
+    // Back face (bz1)
+    meshFace(
+      [bx0, topY, bz1], [bx1, topY, bz1],
+      [bx1, BASE_Y, bz1], [bx0, BASE_Y, bz1],
+      cam, alpha * 0.5, gridW, gridH
+    );
+    // Left face
+    meshFace(
+      [bx0, topY, bz0], [bx0, topY, bz1],
+      [bx0, BASE_Y, bz1], [bx0, BASE_Y, bz0],
+      cam, alpha * 0.7, gridD, gridH
+    );
+    // Right face
+    meshFace(
+      [bx1, topY, bz0], [bx1, topY, bz1],
+      [bx1, BASE_Y, bz1], [bx1, BASE_Y, bz0],
+      cam, alpha * 0.7, gridD, gridH
+    );
+    // Top face
+    meshFace(
+      [bx0, topY, bz0], [bx1, topY, bz0],
+      [bx1, topY, bz1], [bx0, topY, bz1],
+      cam, alpha * 0.6, gridW, gridD
+    );
+
+    // Antenna for tall buildings
+    if (b.antenna) {
+      var antH = bh * 0.12;
+      var antX = (bx0+bx1)/2, antZ = (bz0+bz1)/2;
+      line3D(antX, topY, antZ, antX, topY-antH, antZ, cam, 0.8, 1.0);
+      // Blinking tip
+      var blink = Math.sin(skyT * 4 + b.x * 10) > 0.85 ? 0.9 : 0.0;
+      if (blink > 0) {
+        var tp = project(antX, topY-antH, antZ, cam);
+        if (tp) {
+          skyCtx.beginPath();
+          skyCtx.arc(tp[0], tp[1], 2.5, 0, Math.PI*2);
+          skyCtx.fillStyle = 'rgba('+skyR+','+skyG+','+skyB+','+blink+')';
+          skyCtx.fill();
+        }
+      }
+    }
+
+    // Stepped setback for tallest building
+    if (b.stepped) {
+      var s1y = topY + bh * 0.2;
+      var s1x0 = bx - bw*0.35, s1x1 = bx + bw*0.35;
+      meshFace(
+        [s1x0, topY, bz0], [s1x1, topY, bz0],
+        [s1x1, s1y,  bz0], [s1x0, s1y,  bz0],
+        cam, alpha * 0.4, 2, 2
+      );
+    }
   }
 
   function skylineLoop() {
     if (!skyCtx || !skylineCanvas || !skyRunning) return;
     skyT += 0.004;
 
-    const W = skylineCanvas.width;
-    const H = skylineCanvas.height;
-    skyCtx.clearRect(0,0,W,H);
+    var W = skylineCanvas.width, H = skylineCanvas.height;
+    skyCtx.clearRect(0, 0, W, H);
 
-    // ── CAMERA PATH ─────────────────────────────────────────────
-    // Slow cinematic orbit: camera flies around the city
-    // banking left/right, pitching slightly, rising and falling
-    const orbitR  = 280 + Math.sin(skyT * 0.3) * 60;
-    const orbitH  = -120 + Math.sin(skyT * 0.5) * 40;  // altitude varies
-    const orbitAngle = skyT * 0.22;                      // full rotation ~28s
+    // Camera orbit — slow cinematic flythrough
+    var orbitR  = 260 + Math.sin(skyT * 0.3) * 50;
+    var orbitH  = -110 + Math.sin(skyT * 0.5) * 35;
+    var orbitA  = skyT * 0.2;
 
-    const cam = {
-      x:     Math.cos(orbitAngle) * orbitR,
+    var cam = {
+      x:     Math.cos(orbitA) * orbitR,
       y:     orbitH,
-      z:     Math.sin(orbitAngle) * orbitR,
-      yaw:   orbitAngle + Math.PI + Math.sin(skyT*0.4)*0.08,  // always facing city
-      pitch: 0.18 + Math.sin(skyT * 0.5) * 0.06,              // slight tilt up/down
+      z:     Math.sin(orbitA) * orbitR,
+      yaw:   orbitA + Math.PI + Math.sin(skyT*0.4)*0.06,
+      pitch: 0.16 + Math.sin(skyT * 0.5) * 0.05
     };
 
-    // ── GROUND GRID (river / street plane) ──────────────────────
-    const GW = 500, GD = 500, GY = 40;
-    const gAlpha = 0.06;
-    skyCtx.lineWidth = 0.4;
-    for (let i = 0; i <= GRID_COLS; i++) {
-      const gx = -GW/2 + (i/GRID_COLS)*GW;
-      drawLine3D(gx,GY,-GD/2, gx,GY,GD/2, cam, gAlpha, 0.4);
+    // ── GROUND GRID (PS2 floor plane) ──────────────────────────
+    var GW = 520, GD = 520, GY = 40;
+    var GCols = 22, GRows = 18;
+    var gA = 0.12;
+    for (var i = 0; i <= GCols; i++) {
+      var gx = -GW/2 + (i/GCols)*GW;
+      line3D(gx, GY, -GD/2, gx, GY, GD/2, cam, gA, 0.5);
     }
-    for (let j = 0; j <= GRID_ROWS; j++) {
-      const gz = -GD/2 + (j/GRID_ROWS)*GD;
-      drawLine3D(-GW/2,GY,gz, GW/2,GY,gz, cam, gAlpha, 0.4);
+    for (var j = 0; j <= GRows; j++) {
+      var gz = -GD/2 + (j/GRows)*GD;
+      line3D(-GW/2, GY, gz, GW/2, GY, gz, cam, gA, 0.5);
     }
 
-    // ── BUILDINGS ───────────────────────────────────────────────
-    const CITY_W  = 380;  // total city footprint width
-    const CITY_Z  = 0;    // center Z
-    const MAX_H   = 200;  // max building height in world units
-    const BASE_Y  = 40;   // ground Y (positive = down in 3D)
-    const DEPTH_W = 30;   // building depth
-
+    // ── BUILDINGS as PS2 grid mesh boxes ───────────────────────
     JAX_BUILDINGS.forEach(function(b) {
-      const bx   = (b.x - 0.5) * CITY_W;
-      const bw   = b.w * CITY_W;
-      const bh   = b.h * MAX_H;
-      const topY = BASE_Y - bh;
-      const bz0  = CITY_Z - DEPTH_W/2;
-      const bz1  = CITY_Z + DEPTH_W/2;
-      const bx0  = bx - bw/2;
-      const bx1  = bx + bw/2;
-
-      const a  = 0.45;
-      const lw = 0.8;
-
-      // 4 vertical edges
-      drawLine3D(bx0,topY,bz0, bx0,BASE_Y,bz0, cam,a,lw);
-      drawLine3D(bx1,topY,bz0, bx1,BASE_Y,bz0, cam,a,lw);
-      drawLine3D(bx0,topY,bz1, bx0,BASE_Y,bz1, cam,a,lw);
-      drawLine3D(bx1,topY,bz1, bx1,BASE_Y,bz1, cam,a,lw);
-
-      // Top face
-      drawLine3D(bx0,topY,bz0, bx1,topY,bz0, cam,a,lw);
-      drawLine3D(bx0,topY,bz1, bx1,topY,bz1, cam,a,lw);
-      drawLine3D(bx0,topY,bz0, bx0,topY,bz1, cam,a,lw);
-      drawLine3D(bx1,topY,bz0, bx1,topY,bz1, cam,a,lw);
-
-      // Floor face (ground)
-      drawLine3D(bx0,BASE_Y,bz0, bx1,BASE_Y,bz0, cam,a*0.4,lw*0.5);
-      drawLine3D(bx0,BASE_Y,bz1, bx1,BASE_Y,bz1, cam,a*0.4,lw*0.5);
-      drawLine3D(bx0,BASE_Y,bz0, bx0,BASE_Y,bz1, cam,a*0.4,lw*0.5);
-      drawLine3D(bx1,BASE_Y,bz0, bx1,BASE_Y,bz1, cam,a*0.4,lw*0.5);
-
-      // Floor horizontal lines for tall buildings
-      if (b.h > 0.5) {
-        const floors = Math.floor(b.h * 10);
-        const floorStep = bh / floors;
-        for (let f = 1; f < floors; f++) {
-          const fy = BASE_Y - f * floorStep;
-          const fa = 0.08 + (f/floors)*0.06;
-          drawLine3D(bx0,fy,bz0, bx1,fy,bz0, cam,fa,0.3);
-          drawLine3D(bx0,fy,bz1, bx1,fy,bz1, cam,fa,0.3);
-          drawLine3D(bx0,fy,bz0, bx0,fy,bz1, cam,fa,0.3);
-          drawLine3D(bx1,fy,bz0, bx1,fy,bz1, cam,fa,0.3);
-        }
-      }
-
-      // Antenna for tall buildings
-      if (b.antenna) {
-        const antH = bh * 0.12;
-        const antX = (bx0+bx1)/2;
-        const antZ = (bz0+bz1)/2;
-        drawLine3D(antX,topY,antZ, antX,topY-antH,antZ, cam,0.7,1.0);
-        // blinking tip
-        const blink = Math.sin(skyT * 4 + b.x * 10) > 0.8 ? 0.9 : 0.0;
-        if (blink > 0) {
-          const tp = project(antX, topY-antH, antZ, cam);
-          if (tp) {
-            skyCtx.beginPath();
-            skyCtx.arc(tp[0], tp[1], 2, 0, Math.PI*2);
-            skyCtx.fillStyle = 'rgba('+skyR+','+skyG+','+skyB+','+blink+')';
-            skyCtx.fill();
-          }
-        }
-      }
-
-      // Stepped profile for Bank of America Tower
-      if (b.stepped) {
-        const s1y = topY + bh*0.2;
-        const s1w = bw*0.75;
-        drawLine3D(bx+(s1w/2),s1y,bz0, bx-(s1w/2),s1y,bz0, cam,a*0.6,lw*0.6);
-        drawLine3D(bx+(s1w/2),s1y,bz1, bx-(s1w/2),s1y,bz1, cam,a*0.6,lw*0.6);
-        drawLine3D(bx+(s1w/2),topY,bz0, bx+(s1w/2),s1y,bz0, cam,a*0.6,lw*0.6);
-        drawLine3D(bx-(s1w/2),topY,bz0, bx-(s1w/2),s1y,bz0, cam,a*0.6,lw*0.6);
-      }
+      drawMeshBuilding(b, cam);
     });
 
-    // ── BRIDGES (Main St + Hart) ─────────────────────────────────
-    function drawBridge(x0,x1,y,z0,z1,segments) {
-      const sa = 0.18, lw = 0.5;
-      for (let i=0;i<=segments;i++) {
-        const t2=i/segments;
-        const bx2=x0+(x1-x0)*t2;
-        drawLine3D(bx2,y,z0, bx2,y,z1, cam,sa,lw);
-      }
-      drawLine3D(x0,y,z0, x1,y,z0, cam,sa*1.5,lw);
-      drawLine3D(x0,y,z1, x1,y,z1, cam,sa*1.5,lw);
-      // Cables
-      const midX=(x0+x1)/2, towerH=y-55;
-      drawLine3D(midX,towerH,z0, midX,y,z0, cam,sa*1.8,lw*1.2);
-      drawLine3D(midX,towerH,z1, midX,y,z1, cam,sa*1.8,lw*1.2);
-      for (let i=0;i<=segments;i++) {
-        const t2=i/segments;
-        const bx2=x0+(x1-x0)*t2;
-        drawLine3D(midX,towerH,z0, bx2,y,z0, cam,sa*0.5,0.3);
-        drawLine3D(midX,towerH,z1, bx2,y,z1, cam,sa*0.5,0.3);
-      }
+    // ── BRIDGE (Main St) as mesh ────────────────────────────────
+    var brY = 40, brZ0 = -55, brZ1 = -35;
+    meshFace(
+      [-90, brY, brZ0], [90, brY, brZ0],
+      [90,  brY, brZ1], [-90, brY, brZ1],
+      cam, 0.1, 12, 2
+    );
+    // Bridge towers
+    line3D(0, brY, (brZ0+brZ1)/2, 0, brY-60, (brZ0+brZ1)/2, cam, 0.25, 0.8);
+    for (var k = -5; k <= 5; k++) {
+      line3D(k*16, brY, (brZ0+brZ1)/2, 0, brY-58, (brZ0+brZ1)/2, cam, 0.08, 0.3);
     }
-    drawBridge(-80,80, BASE_Y, -60,-40, 8);   // Main St Bridge
-    drawLine3D(-120,BASE_Y,-50, 120,BASE_Y,-50, cam,0.1,0.4); // Hart Bridge cable stay hint
 
     requestAnimationFrame(skylineLoop);
-  }
-
-  function updateSkylineColor(r, g, b) {
-    skyR = r; skyG = g; skyB = b;
-  }
-
-  // ── FLYER UPLOAD ─────────────────────────────────────────
-
-  function downloadUpdatedHTML() {
-    try {
-      var fullHTML = document.documentElement.outerHTML;
-
-      // Passwords live server-side in Netlify env vars — no need to embed in HTML
-      var newHTML = fullHTML;
-
-      // Download updated index.html
-      var blob = new Blob([newHTML], { type: 'text/html' });
-      var url  = URL.createObjectURL(blob);
-      var a    = document.createElement('a');
-      a.href = url; a.download = 'index.html'; a.click();
-      URL.revokeObjectURL(url);
-
-      // If flyer was changed via upload, also download the new flyer.png
-      if (currentFlyerSrc !== DEFAULT_FLYER && currentFlyerSrc.startsWith('data:')) {
-        setTimeout(function() {
-          var parts = currentFlyerSrc.split(',');
-          var mimeMatch = parts[0].match(/data:([^;]+)/);
-          var mime = mimeMatch ? mimeMatch[1] : 'image/png';
-          var ext  = mime.split('/')[1] || 'png';
-          var byteStr = atob(parts[1]);
-          var arr = new Uint8Array(byteStr.length);
-          for (var i = 0; i < byteStr.length; i++) arr[i] = byteStr.charCodeAt(i);
-          var imgBlob = new Blob([arr], { type: mime });
-          var imgUrl  = URL.createObjectURL(imgBlob);
-          var b = document.createElement('a');
-          b.href = imgUrl; b.download = 'flyer.' + ext; b.click();
-          URL.revokeObjectURL(imgUrl);
-        }, 800);
-      }
-    } catch(e) {
-      alert('Download failed: ' + e.message);
-    }
-  }
-
-  // ── PASSWORD MANAGER ─────────────────────────────────────
-  function renderPasswordList() {
-    var list = document.getElementById("pw-list");
-    if (!list) return;
-    list.innerHTML = "";
-
-    function makeItem(pw, role, i) {
-      var li = document.createElement("li");
-      li.className = "pw-item";
-      var canDelete = role === "user" ? USER_PASSWORDS.length > 1 : ADMIN_PASSWORDS.length > 1;
-
-      var labelSpan = document.createElement("span");
-      labelSpan.className = "pw-label";
-
-      var valSpan = document.createElement("span");
-      valSpan.className = "pw-value";
-      valSpan.textContent = pw;
-
-      var roleSpan = document.createElement("span");
-      roleSpan.className = "pw-role";
-      roleSpan.textContent = role === "admin" ? "Admin" : "Guest";
-
-      labelSpan.appendChild(valSpan);
-      labelSpan.appendChild(roleSpan);
-      li.appendChild(labelSpan);
-
-      if (canDelete) {
-        var btn = document.createElement("button");
-        btn.className = "pw-delete";
-        btn.textContent = "REMOVE";
-        btn.onclick = (function(r, idx) {
-          return function() { deletePassword(r, idx); };
-        })(role, i);
-        li.appendChild(btn);
-      } else {
-        var req = document.createElement("span");
-        req.style.cssText = "font-size:0.5rem;color:#333;letter-spacing:0.1em;";
-        req.textContent = "REQUIRED";
-        li.appendChild(req);
-      }
-
-      list.appendChild(li);
-    }
-
-    USER_PASSWORDS.forEach(function(pw, i)  { makeItem(pw, "user",  i); });
-    ADMIN_PASSWORDS.forEach(function(pw, i) { makeItem(pw, "admin", i); });
-  }
-
-  function addPassword() {
-    var val  = document.getElementById("pw-new-val").value.trim();
-    var role = document.getElementById("pw-new-role").value;
-    if (!val) { showPwStatus("Enter a password first", false); return; }
-    if (val.length < 4) { showPwStatus("Must be at least 4 characters", false); return; }
-    var allPws = USER_PASSWORDS.concat(ADMIN_PASSWORDS).map(function(p){ return p.toLowerCase(); });
-    if (allPws.indexOf(val.toLowerCase()) !== -1) { showPwStatus("Password already exists", false); return; }
-    fetch("/.netlify/functions/manage-passwords", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "add", password: val, role: role })
-    })
-    .then(function(res) { return res.json(); })
-    .then(function(data) {
-      if (data.success) {
-        if (data.userPasswords)  USER_PASSWORDS  = data.userPasswords;
-        if (data.adminPasswords) ADMIN_PASSWORDS = data.adminPasswords;
-        document.getElementById("pw-new-val").value = "";
-        renderPasswordList();
-        var msg = "Added: " + val + (data.sessionOnly ? " (session only — set API key to persist)" : "");
-        showPwStatus(msg, true);
-      } else {
-        showPwStatus(data.error || "Failed to add", false);
-      }
-    })
-    .catch(function() { showPwStatus("Connection error", false); });
-  }
-
-  function deletePassword(role, idx) {
-    var pw = role === "admin" ? ADMIN_PASSWORDS[idx] : USER_PASSWORDS[idx];
-    if (!pw) return;
-    fetch("/.netlify/functions/manage-passwords", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "remove", password: pw, role: role })
-    })
-    .then(function(res) { return res.json(); })
-    .then(function(data) {
-      if (data.success) {
-        if (data.userPasswords)  USER_PASSWORDS  = data.userPasswords;
-        if (data.adminPasswords) ADMIN_PASSWORDS = data.adminPasswords;
-        renderPasswordList();
-        var msg = data.sessionOnly ? "Removed (session only — set API key to persist)" : "Password removed";
-        showPwStatus(msg, true);
-      } else {
-        showPwStatus(data.error || "Cannot remove last password", false);
-      }
-    })
-    .catch(function() { showPwStatus("Connection error", false); });
-  }
-
-  function showPwStatus(msg, ok) {
-    const el = document.getElementById("pw-status");
-    if (!el) return;
-    el.textContent = msg;
-    el.className = "pw-status" + (ok ? " ok" : "");
-    el.style.display = "block";
-    setTimeout(function(){ el.style.display = "none"; }, 3000);
   }
 
     function startFlyerGlitch(){

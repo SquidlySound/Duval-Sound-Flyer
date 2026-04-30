@@ -303,24 +303,6 @@
   .activity-event { color:#888; letter-spacing:0.05em; }
   .activity-time  { color:#444; letter-spacing:0.05em; font-size:0.55rem; }
 
-  /* Password manager */
-  .pw-list { list-style:none; margin-bottom:1rem; }
-  .pw-item { display:flex; align-items:center; justify-content:space-between; padding:0.6rem 0; border-bottom:1px solid #1a1a1a; gap:0.5rem; }
-  .pw-item:last-child { border-bottom:none; }
-  .pw-label { font-size:0.65rem; letter-spacing:0.1em; color:#888; flex:1; }
-  .pw-value { font-size:0.65rem; letter-spacing:0.15em; color:var(--white); font-family:'Space Mono','Courier New',monospace; }
-  .pw-role { font-size:0.5rem; letter-spacing:0.2em; color:#555; text-transform:uppercase; margin-left:0.5rem; }
-  .pw-delete { background:transparent; border:1px solid #333; color:#555; font-size:0.55rem; letter-spacing:0.1em; font-family:'Space Mono','Courier New',monospace; padding:0.2rem 0.5rem; cursor:pointer; transition:color 0.2s,border-color 0.2s; white-space:nowrap; }
-  .pw-delete:hover { color:#e63329; border-color:#e63329; }
-  .pw-add-row { display:flex; gap:0.5rem; margin-top:0.5rem; }
-  .pw-input { flex:1; background:transparent; border:1px solid #333; color:var(--white); font-family:'Space Mono','Courier New',monospace; font-size:0.75rem; letter-spacing:0.15em; padding:0.6rem 0.75rem; outline:none; transition:border-color 0.2s; min-width:0; }
-  .pw-input:focus { border-color:var(--white); }
-  .pw-input::placeholder { color:#444; }
-  .pw-add-btn { background:var(--white); color:var(--black); border:none; font-family:'Bebas Neue','Arial Narrow',Impact,sans-serif; font-size:1rem; letter-spacing:0.1em; padding:0.6rem 1rem; cursor:pointer; white-space:nowrap; transition:opacity 0.15s; }
-  .pw-add-btn:hover { opacity:0.85; }
-  .pw-status { font-size:0.6rem; letter-spacing:0.15em; color:#e63329; text-transform:uppercase; margin-top:0.5rem; display:none; }
-  .pw-status.ok { color:#2ecc71; }
-
   /* Admin logout */
   .admin-footer { position:relative; z-index:1; width:100%; max-width:600px; margin-top:1rem; }
   .btn-logout { width:100%; background:transparent; border:1px solid #222; color:#444; font-family:var(--mono); font-size:0.65rem; letter-spacing:0.2em; text-transform:uppercase; padding:0.75rem; cursor:pointer; transition:color 0.2s, border-color 0.2s; }
@@ -387,7 +369,11 @@
 
   <!-- Stats -->
   <div class="admin-section fade-in">
-    <div class="section-label">// Live Stats</div>
+    <div class="section-label" style="justify-content:space-between;">
+      <span>// Live Stats</span>
+      <button onclick="renderAdminStats()" style="background:transparent;border:1px solid #333;color:#666;font-family:'Space Mono','Courier New',monospace;font-size:0.55rem;letter-spacing:0.15em;text-transform:uppercase;padding:0.2rem 0.6rem;cursor:pointer;transition:color 0.2s,border-color 0.2s;" onmouseover="this.style.color='#f5f0e8';this.style.borderColor='#666';" onmouseout="this.style.color='#666';this.style.borderColor='#333';">&#8635; REFRESH</button>
+    </div>
+    <div id="stats-status" style="font-size:0.55rem;letter-spacing:0.15em;color:#555;margin-bottom:1rem;text-transform:uppercase;"></div>
     <div class="stats-grid">
       <div class="stat-cell">
         <div class="stat-value" id="stat-views">0</div>
@@ -447,23 +433,999 @@
 
   
 
-
-    <!-- Password Manager -->
-  <div class="admin-section fade-in">
-    <div class="section-label">// Password Manager</div>
-    <ul class="pw-list" id="pw-list"></ul>
-    <div class="pw-add-row">
-      <input class="pw-input" id="pw-new-val" type="text" placeholder="new password" autocomplete="off" spellcheck="false">
-      <select class="pw-input" id="pw-new-role" style="flex:0 0 auto;width:auto;cursor:pointer;">
-        <option value="user">Guest</option>
-        <option value="admin">Admin</option>
-      </select>
-      <button class="pw-add-btn" onclick="addPassword()">ADD</button>
-    </div>
-    <div class="pw-status" id="pw-status"></div>
-    <p style="margin-top:1rem;font-size:0.6rem;letter-spacing:0.1em;color:#444;line-height:1.8;">Changes apply immediately for this session. To make permanent, download the updated file and upload it to GitHub:</p>
-    <button class="btn btn-ghost" style="margin-top:0.75rem;width:100%;" onclick="downloadUpdatedHTML()">&#8681; DOWNLOAD UPDATED HTML</button>
+  <div class="admin-footer fade-in">
+    <button class="btn-logout" onclick="logout()">&#8592; Exit Admin</button>
   </div>
+</div>
+
+<script>
+  // ── CONFIG ─────────────────────────────────────────────────
+  // Passwords are verified server-side via Netlify Function
+  const DEFAULT_FLYER = "flyer.png";
+  // ───────────────────────────────────────────────────────────
+
+  // Runtime flyer src (can be replaced by admin upload)
+  let currentFlyerSrc = DEFAULT_FLYER;
+
+  // ── STATS (localStorage for persistence across sessions) ──
+  const STATS_KEY = "ds_stats";
+
+  // In-memory fallback so stats never crash the page on file:// protocol
+  let memStats = null;
+
+  function isLocalStorageAvailable() {
+    try { localStorage.setItem("__test__","1"); localStorage.removeItem("__test__"); return true; }
+    catch(e) { return false; }
+  }
+  const HAS_LS = isLocalStorageAvailable();
+
+  function loadStats() {
+    try {
+      if (HAS_LS) return JSON.parse(localStorage.getItem(STATS_KEY)) || defaultStats();
+      return memStats || defaultStats();
+    } catch(e) { return defaultStats(); }
+  }
+  function defaultStats() {
+    return { views:0, unlocks:0, fails:0, todayViews:0, todayUnlocks:0, lastDate:"", history:[], weekChart:{} };
+  }
+  function saveStats(s) {
+    try {
+      if (HAS_LS) localStorage.setItem(STATS_KEY, JSON.stringify(s));
+      else memStats = s;
+    } catch(e) { memStats = s; }
+  }
+  function todayKey() { return new Date().toISOString().slice(0,10); }
+  function recordEvent(type) {
+    try {
+      const s = loadStats();
+      const today = todayKey();
+      if (s.lastDate !== today) { s.todayViews = 0; s.todayUnlocks = 0; s.lastDate = today; }
+      if (type === "view")   { s.views++;   s.todayViews++;   }
+      if (type === "unlock") { s.unlocks++; s.todayUnlocks++; }
+      if (type === "fail")   { s.fails++;   }
+      s.history.unshift({ type:type, time: new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}), date: new Date().toLocaleDateString([], {month:"short",day:"numeric"}) });
+      if (s.history.length > 20) s.history.pop();
+      if (!s.weekChart) s.weekChart = {};
+      s.weekChart[today] = (s.weekChart[today] || 0) + (type === "view" ? 1 : 0);
+      saveStats(s);
+    } catch(e) {}
+    // Fire GA custom event
+    try {
+      if (typeof gtag === "function") {
+        if (type === "view")   gtag("event", "flyer_view",   { event_category: "engagement" });
+        if (type === "unlock") gtag("event", "flyer_unlock", { event_category: "engagement" });
+        if (type === "fail")   gtag("event", "flyer_fail",   { event_category: "engagement" });
+      }
+    } catch(e) {}
+    // Log to Google Sheets via Netlify function (fire and forget)
+    try {
+      fetch("/.netlify/functions/log-event", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: type,
+          timestamp: new Date().toISOString(),
+          date: new Date().toLocaleDateString([], { month:"short", day:"numeric", year:"numeric" }),
+          time: new Date().toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" })
+        })
+      });
+    } catch(e) {}
+  }
+
+  // Record page view on load
+  try { recordEvent("view"); } catch(e) {}
+
+  // ── INIT IMAGES ──────────────────────────────────────────
+  function applyFlyerSrc(src) {
+    currentFlyerSrc = src;
+    document.getElementById("flyer-img").src = src;
+    document.getElementById("flyer-bg-img").src = src;
+    document.getElementById("admin-flyer-preview").src = src;
+    try { extractFlyerColors(src); } catch(e) {}
+  }
+
+  // ── COLOR EXTRACTION ─────────────────────────────────────
+  function extractFlyerColors(src) {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = function() {
+      const canvas = document.createElement("canvas");
+      const SW = 100, SH = Math.round(100 * (img.height / img.width));
+      canvas.width = SW; canvas.height = SH;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, SW, SH);
+      const data = ctx.getImageData(0, 0, SW, SH).data;
+
+      // Build color buckets with finer 24-step quantization
+      const buckets = {};
+      for (let i = 0; i < data.length; i += 4) {
+        const r = data[i], g = data[i+1], b = data[i+2], a = data[i+3];
+        if (a < 200) continue;
+        const brightness = (r + g + b) / 3;
+        if (brightness < 15 || brightness > 240) continue;
+        const qr = Math.round(r / 24) * 24;
+        const qg = Math.round(g / 24) * 24;
+        const qb = Math.round(b / 24) * 24;
+        const key = qr + "," + qg + "," + qb;
+        buckets[key] = (buckets[key] || 0) + 1;
+      }
+
+      const sorted = Object.entries(buckets).sort(function(a, b){ return b[1] - a[1]; });
+
+      // Parse all candidates into objects with saturation + brightness
+      const parsed = sorted.slice(0, Math.min(40, sorted.length)).map(function(entry) {
+        const p = entry[0].split(",");
+        const r = +p[0], g = +p[1], b = +p[2];
+        const rn = r/255, gn = g/255, bn = b/255;
+        const max = Math.max(rn,gn,bn), min = Math.min(rn,gn,bn);
+        const sat = max === 0 ? 0 : (max - min) / max;
+        const bri = (r + g + b) / 3;
+        return { r, g, b, sat, bri, count: entry[1] };
+      });
+
+      // Dominant = most frequent mid-tone
+      const dominant = parsed[0] || { r:80, g:80, b:80 };
+
+      // Pick up to 4 palette colors that are visually distinct from each other
+      const palette = [dominant];
+      for (let i = 1; i < parsed.length && palette.length < 5; i++) {
+        const c = parsed[i];
+        // Must be sufficiently different from all already-picked colors
+        const distinct = palette.every(function(p) {
+          const dr = c.r - p.r, dg = c.g - p.g, db = c.b - p.b;
+          return Math.sqrt(dr*dr + dg*dg + db*db) > 60;
+        });
+        if (distinct) palette.push(c);
+      }
+
+      // Ensure we have at least 3 colors
+      while (palette.length < 3) {
+        const last = palette[palette.length - 1];
+        palette.push({ r: Math.min(255,last.r+40), g: Math.min(255,last.g+20), b: Math.max(0,last.b-30) });
+      }
+
+      // Find most saturated as accent
+      const accent = palette.slice().sort(function(a,b){ return b.sat - a.sat; })[0];
+
+      applyThemeColors(dominant, accent, palette);
+    };
+    img.src = src;
+  }
+
+  function applyThemeColors(dom, acc, palette) {
+    const fs = document.getElementById("flyer-screen");
+    if (!palette) palette = [dom, acc];
+
+    const accStr = acc.r + "," + acc.g + "," + acc.b;
+    const lDom = lighten(dom, 0.6);
+    const lAcc = lighten(acc, 0.5);
+
+    fs.style.setProperty("--theme-primary", "rgb(" + lDom.r + "," + lDom.g + "," + lDom.b + ")");
+    fs.style.setProperty("--theme-accent",  "rgb(" + lAcc.r + "," + lAcc.g + "," + lAcc.b + ")");
+    fs.style.setProperty("--theme-glow",    "rgba(" + accStr + ",0.25)");
+
+    // ── GRADIENT MESH BACKGROUND ───────────────────────────────
+    // Build or update the gradient canvas overlay behind the blurred flyer
+    const meshEl = document.getElementById("flyer-mesh");
+    if (!meshEl) return;
+    meshEl.width  = window.innerWidth;
+    meshEl.height = window.innerHeight;
+    const mc = meshEl.getContext("2d");
+    const W = meshEl.width, H = meshEl.height;
+    mc.clearRect(0, 0, W, H);
+
+    // Paint radial blobs for each palette color at scattered positions
+    const positions = [
+      { x: 0.15, y: 0.15 },
+      { x: 0.85, y: 0.15 },
+      { x: 0.50, y: 0.55 },
+      { x: 0.15, y: 0.85 },
+      { x: 0.85, y: 0.80 },
+    ];
+    palette.forEach(function(col, i) {
+      if (i >= positions.length) return;
+      const pos = positions[i];
+      const x = pos.x * W, y = pos.y * H;
+      const radius = Math.max(W, H) * (0.45 + i * 0.05);
+      const grad = mc.createRadialGradient(x, y, 0, x, y, radius);
+      // Boost saturation of palette color for the mesh
+      const boosted = boostSaturation(col, 1.8);
+      grad.addColorStop(0,   "rgba(" + boosted.r + "," + boosted.g + "," + boosted.b + ",0.22)");
+      grad.addColorStop(0.5, "rgba(" + boosted.r + "," + boosted.g + "," + boosted.b + ",0.08)");
+      grad.addColorStop(1,   "rgba(" + boosted.r + "," + boosted.g + "," + boosted.b + ",0)");
+      mc.fillStyle = grad;
+      mc.fillRect(0, 0, W, H);
+    });
+
+    // Fade mesh in
+    setTimeout(function(){ meshEl.style.opacity = "1"; }, 50);
+
+    // ── BLURRED BG — more saturated, more colorful ─────────────
+    const bgImg = document.getElementById("flyer-bg-img");
+    if (bgImg) {
+      bgImg.style.transition = "filter 1.4s";
+      bgImg.style.filter = "blur(24px) brightness(0.32) saturate(2.5) contrast(1.3)";
+    }
+
+    // ── MIRROR TILES — also more colorful ──────────────────────
+    const mirror = document.getElementById("flyer-mirror");
+    if (mirror) {
+      mirror.style.transition = "opacity 1.4s, filter 1.4s";
+      mirror.style.opacity = "0.28";
+      mirror.style.filter = "blur(2px) brightness(0.55) saturate(1.8)";
+    }
+
+    // ── SCANLINES tinted with dominant ─────────────────────────
+    const domStr = dom.r + "," + dom.g + "," + dom.b;
+    const scanEl = document.querySelector(".flyer-scanlines");
+    if (scanEl) {
+      scanEl.style.background = "repeating-linear-gradient(to bottom,transparent 0px,transparent 3px,rgba(" + domStr + ",0.1) 3px,rgba(" + domStr + ",0.1) 4px)";
+      scanEl.style.transition = "background 1.2s";
+    }
+
+    // ── GLITCH BARS use accent ──────────────────────────────────
+    [document.getElementById("fbar1"), document.getElementById("fbar2")].forEach(function(b) {
+      if (b) b.style.background = "rgb(" + lAccStr(acc) + ")";
+    });
+
+    // ── VIGNETTE tinted toward dominant ────────────────────────
+    const vigEl = document.querySelector(".flyer-vignette");
+    if (vigEl) {
+      const darkDom = darken(dom, 0.85);
+      vigEl.style.background = "radial-gradient(ellipse at center,transparent 20%,rgba(" + darkDom.r + "," + darkDom.g + "," + darkDom.b + ",0.82) 100%)";
+      vigEl.style.transition = "background 1.4s";
+    }
+
+    // ── FLYER CARD glow uses accent ─────────────────────────────
+    fs.style.setProperty("--theme-glow", "rgba(" + accStr + ",0.3)");
+    // Update skyline wireframe color — contrast-aware
+    // Pick the most visible color: accent boosted, or invert if too dark/light
+    (function() {
+      // Use accent color, saturation-boosted
+      const sc = boostSaturation(acc, 2.2);
+      // Measure perceptual brightness (0-255)
+      const brightness = 0.299*sc.r + 0.587*sc.g + 0.114*sc.b;
+      let fr, fg, fb;
+      if (brightness < 40) {
+        // Too dark — invert toward white-ish
+        fr = 255 - sc.r; fg = 255 - sc.g; fb = 255 - sc.b;
+        // If still dark, force light
+        const b2 = 0.299*fr + 0.587*fg + 0.114*fb;
+        if (b2 < 80) { fr = 210; fg = 210; fb = 220; }
+      } else if (brightness > 215) {
+        // Too light — darken and shift hue slightly
+        fr = Math.max(0, sc.r - 80);
+        fg = Math.max(0, sc.g - 60);
+        fb = Math.min(255, sc.b + 40);
+        const b3 = 0.299*fr + 0.587*fg + 0.114*fb;
+        if (b3 > 200) { fr = 40; fg = 180; fb = 220; } // fallback cyan-ish
+      } else {
+        // Good range — use as-is, slightly brightened
+        const boost = Math.min(255/Math.max(brightness,1), 2.5);
+        fr = Math.min(255, Math.round(sc.r * boost));
+        fg = Math.min(255, Math.round(sc.g * boost));
+        fb = Math.min(255, Math.round(sc.b * boost));
+      }
+      updateSkylineColor(fr, fg, fb);
+    })();
+  }
+
+  function boostSaturation(c, factor) {
+    const rn = c.r/255, gn = c.g/255, bn = c.b/255;
+    const max = Math.max(rn,gn,bn), min = Math.min(rn,gn,bn);
+    const L = (max + min) / 2;
+    if (max === min) return c; // already grey
+    // Convert to HSL, boost S, convert back
+    let H2, S = (max - min) / (L < 0.5 ? (max+min) : (2-max-min));
+    S = Math.min(1, S * factor);
+    if (max === rn) H2 = ((gn-bn)/(max-min) + 6) % 6;
+    else if (max === gn) H2 = (bn-rn)/(max-min) + 2;
+    else H2 = (rn-gn)/(max-min) + 4;
+    H2 = H2 / 6;
+    function hue2rgb(p, q, t) {
+      if (t < 0) t += 1; if (t > 1) t -= 1;
+      if (t < 1/6) return p + (q-p)*6*t;
+      if (t < 1/2) return q;
+      if (t < 2/3) return p + (q-p)*(2/3-t)*6;
+      return p;
+    }
+    const q2 = L < 0.5 ? L*(1+S) : L+S-L*S;
+    const p2 = 2*L - q2;
+    return {
+      r: Math.round(hue2rgb(p2,q2,H2+1/3)*255),
+      g: Math.round(hue2rgb(p2,q2,H2)*255),
+      b: Math.round(hue2rgb(p2,q2,H2-1/3)*255)
+    };
+  }
+  function darken(c, amount) {
+    return { r: Math.round(c.r * (1-amount)), g: Math.round(c.g * (1-amount)), b: Math.round(c.b * (1-amount)) };
+  }
+
+  function lighten(c, amount) {
+    return {
+      r: Math.min(255, Math.round(c.r + (255 - c.r) * amount)),
+      g: Math.min(255, Math.round(c.g + (255 - c.g) * amount)),
+      b: Math.min(255, Math.round(c.b + (255 - c.b) * amount))
+    };
+  }
+  function lAccStr(c) {
+    const l = lighten(c, 0.5);
+    return l.r + "," + l.g + "," + l.b;
+  }
+  applyFlyerSrc(DEFAULT_FLYER);
+
+  // ── PASSWORD ─────────────────────────────────────────────
+  let attempts = 0;
+  document.getElementById("password-input").addEventListener("keydown", function(e) {
+    if (e.key === "Enter") checkPassword();
+  });
+  function togglePassword() {
+    const input = document.getElementById("password-input");
+    const btn   = document.querySelector(".toggle-pw");
+    if (input.type === "password") { input.type = "text"; btn.textContent = "HIDE"; }
+    else { input.type = "password"; btn.textContent = "SHOW"; }
+  }
+  function checkPassword() {
+    var raw = document.getElementById("password-input").value;
+    if (!raw) return;
+
+    // Show loading state
+    var btn = document.querySelector(".enter-btn");
+    var origText = btn.textContent;
+    btn.textContent = "...";
+    btn.disabled = true;
+
+    fetch("/.netlify/functions/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: raw })
+    })
+    .then(function(res) { return res.json(); })
+    .then(function(data) {
+      btn.textContent = origText;
+      btn.disabled = false;
+
+      if (data.role === "admin") {
+        // Store passwords returned from server for display in admin panel
+        if (data.userPasswords)  USER_PASSWORDS  = data.userPasswords;
+        if (data.adminPasswords) ADMIN_PASSWORDS = data.adminPasswords;
+        recordEvent("unlock");
+        document.getElementById("lock-screen").classList.add("fade-out");
+        setTimeout(function() {
+          document.getElementById("lock-screen").style.display = "none";
+          document.getElementById("admin-screen").style.display = "flex";
+          
+          renderAdminStats();
+        }, 400);
+
+      } else if (data.role === "user") {
+        recordEvent("unlock");
+        document.getElementById("lock-screen").classList.add("fade-out");
+        try { buildMirrorBg(); } catch(e) {}
+        setTimeout(function() {
+          document.getElementById("lock-screen").style.display = "none";
+          document.getElementById("flyer-screen").style.display = "flex";
+          
+          startFlyerGlitch();
+        }, 400);
+
+      } else {
+        // Wrong password
+        attempts++;
+        recordEvent("fail");
+        document.getElementById("error-msg").classList.add("show");
+        var wrap = document.querySelector(".input-wrap");
+        wrap.classList.remove("shake"); void wrap.offsetWidth; wrap.classList.add("shake");
+        document.getElementById("password-input").value = "";
+        if (attempts > 1) document.getElementById("attempt-counter").textContent = attempts + " failed attempts";
+      }
+    })
+    .catch(function(err) {
+      // Network error fallback
+      btn.textContent = origText;
+      btn.disabled = false;
+      document.getElementById("error-msg").textContent = "Connection error — try again";
+      document.getElementById("error-msg").classList.add("show");
+    });
+  }
+  function returnToLock() {
+    skyRunning = false;
+    if (skylineCanvas) skylineCanvas.style.opacity = '0';
+    const mesh = document.getElementById('flyer-mesh');
+    if (mesh) mesh.style.opacity = '0';
+    document.getElementById('flyer-screen').classList.add('fade-out');
+    setTimeout(function() {
+      document.getElementById('flyer-screen').style.display = 'none';
+      document.getElementById('flyer-screen').classList.remove('fade-out');
+      document.getElementById('lock-screen').style.display = 'flex';
+      document.getElementById('lock-screen').classList.remove('fade-out');
+      
+      document.getElementById('password-input').value = '';
+      document.getElementById('error-msg').classList.remove('show');
+      document.getElementById('attempt-counter').textContent = '';
+      attempts = 0;
+    }, 400);
+  }
+
+  function logout() {
+    document.getElementById("admin-screen").style.display  = "none";
+    document.getElementById("flyer-screen").style.display  = "none";
+    document.getElementById("lock-screen").style.display   = "flex";
+    document.getElementById("lock-screen").classList.remove("fade-out");
+    document.getElementById("password-input").value = "";
+    document.getElementById("error-msg").classList.remove("show");
+    document.getElementById("attempt-counter").textContent = "";
+    attempts = 0;
+  }
+
+  // ── ADMIN STATS RENDER ────────────────────────────────────
+  function renderAdminStats() {
+    setStatsStatus("loading");
+
+    fetch("/.netlify/functions/get-stats")
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.error) {
+          setStatsStatus("error", data.error);
+          return;
+        }
+        // Populate all stat cells from live sheet data
+        document.getElementById("stat-views").textContent   = data.views   || 0;
+        document.getElementById("stat-unlocks").textContent = data.unlocks || 0;
+        document.getElementById("stat-fails").textContent   = data.fails   || 0;
+        document.getElementById("stat-today").textContent   = "+" + (data.todayViews   || 0) + " today";
+        document.getElementById("stat-unlocks-today").textContent = "+" + (data.todayUnlocks || 0) + " today";
+        const liveRate = (data.views||0) > 0 ? Math.round(((data.unlocks||0) / (data.views||0)) * 100) : 0;
+        document.getElementById("stat-rate").textContent    = liveRate + "%";
+        document.getElementById("stat-unique").textContent         = data.uniqueVisitors  || 0;
+        document.getElementById("stat-unique-unlocks").textContent = data.uniqueUnlockers || 0;
+        document.getElementById("stat-unique-today").textContent   = "+" + (data.todayUniqueVisitors || 0) + " today";
+        if (data.weekChart)    renderChart(data.weekChart);
+        if (data.recentEvents) renderActivity(data.recentEvents);
+        setStatsStatus("ok");
+      })
+      .catch(function(err) {
+        setStatsStatus("error", "Connection error");
+      });
+  }
+
+  function setStatsStatus(state, msg) {
+    var el = document.getElementById("stats-status");
+    if (!el) return;
+    if (state === "loading") {
+      el.textContent = "// Fetching live data...";
+      el.style.color = "#555";
+    } else if (state === "ok") {
+      var now = new Date().toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"});
+      el.textContent = "// Last updated " + now;
+      el.style.color = "#2ecc71";
+    } else if (state === "error") {
+      el.textContent = "// " + (msg || "Could not fetch data") + " — check Netlify env vars";
+      el.style.color = "#e63329";
+    }
+  }
+
+  function renderChart(weekChart) {
+    const container = document.getElementById("chart-bars");
+    container.innerHTML = "";
+    const days = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(); d.setDate(d.getDate() - i);
+      const key = d.toISOString().slice(0,10);
+      const label = d.toLocaleDateString([], {weekday:"short"}).slice(0,2);
+      days.push({ key, label, val: weekChart[key] || 0 });
+    }
+    const max = Math.max(...days.map(function(d){ return d.val; }), 1);
+    days.forEach(function(d) {
+      const col = document.createElement("div");
+      col.className = "chart-bar-col";
+      const barWrap = document.createElement("div");
+      barWrap.className = "chart-bar";
+      barWrap.style.height = "50px";
+      const fill = document.createElement("div");
+      fill.className = "chart-bar-fill";
+      fill.style.height = Math.round((d.val / max) * 100) + "%";
+      barWrap.appendChild(fill);
+      const lbl = document.createElement("div");
+      lbl.className = "chart-day";
+      lbl.textContent = d.label;
+      col.appendChild(barWrap);
+      col.appendChild(lbl);
+      container.appendChild(col);
+    });
+  }
+
+  function renderActivity(history) {
+    const list = document.getElementById("activity-list");
+    list.innerHTML = "";
+    if (!history.length) {
+      list.innerHTML = "<li class='activity-item'><span class='activity-event'>No activity yet</span><span class='activity-time'>—</span></li>";
+      return;
+    }
+    const labels = { view:"Page viewed", unlock:"Flyer unlocked", fail:"Failed attempt" };
+    history.slice(0,10).forEach(function(h) {
+      const li = document.createElement("li");
+      li.className = "activity-item";
+      const ipTag = h.ip && h.ip !== "—" ? " <span style='color:#444;font-size:0.5rem;letter-spacing:0.1em;'>·" + h.ip + "</span>" : "";
+      li.innerHTML = "<span class='activity-event'>" + (labels[h.type]||h.type) + ipTag + "</span>" +
+                     "<span class='activity-time'>" + h.date + " " + h.time + "</span>";
+      list.appendChild(li);
+    });
+  }
+
+  // ── FLYER UPLOAD ──────────────────────────────────────────
+
+  // ── MIRROR BG ────────────────────────────────────────────
+  function buildMirrorBg() {
+    const container = document.getElementById("flyer-mirror");
+    const W = window.innerWidth, H = window.innerHeight;
+    const tileW = Math.floor(W / 2), tileH = Math.floor(H / 2);
+    container.innerHTML = "";
+    const cols = Math.ceil(W / tileW) + 1, rows = Math.ceil(H / tileH) + 1;
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const img = document.createElement("img");
+        img.src = currentFlyerSrc;
+        img.className = "mirror-tile";
+        img.style.width  = tileW + "px";
+        img.style.height = tileH + "px";
+        img.style.objectFit = "cover";
+        img.style.left = (c * tileW) + "px";
+        img.style.top  = (r * tileH) + "px";
+        img.style.transform = "scaleX(" + (c%2===1?-1:1) + ") scaleY(" + (r%2===1?-1:1) + ")";
+        container.appendChild(img);
+      }
+    }
+  }
+
+  // ── VCR GLITCH SHARED ────────────────────────────────────
+  function drawVCRStatic(ctx, w, h, intensity) {
+    const imageData = ctx.createImageData(w, h);
+    const data = imageData.data;
+    for (let i = 0; i < data.length; i += 4) {
+      const v = Math.random() < intensity ? Math.floor(Math.random() * 255) : 0;
+      data[i] = data[i+1] = data[i+2] = v;
+      data[i+3] = Math.random() < intensity ? 60 : 0;
+    }
+    ctx.putImageData(imageData, 0, 0);
+    for (let b = 0; b < Math.floor(Math.random()*4)+1; b++) {
+      const y = Math.random() * h, bh = 2 + Math.random() * 12;
+      ctx.save(); ctx.globalAlpha = 0.15 + Math.random() * 0.35;
+      ctx.fillStyle = Math.random() > 0.5 ? "#fff" : "#000";
+      ctx.fillRect(0, y, w, bh); ctx.restore();
+    }
+  }
+  function drawSliceGlitch(ctx, w, h) {
+    for (let s = 0; s < Math.floor(Math.random()*6)+2; s++) {
+      const y = Math.random()*h, sh = 1+Math.random()*20, sx = (Math.random()-0.5)*60;
+      try { const sl = ctx.getImageData(0,y,w,sh); ctx.putImageData(sl,sx,y); } catch(e){}
+    }
+  }
+
+  // Lock screen glitch
+  const lockCanvas = document.getElementById("vcr-canvas");
+  const lockCtx = lockCanvas.getContext("2d");
+  function resizeLockCanvas(){ lockCanvas.width=window.innerWidth; lockCanvas.height=window.innerHeight; }
+  resizeLockCanvas(); window.addEventListener("resize", resizeLockCanvas);
+
+  let lockFrame = 0;
+  function lockGlitchLoop() {
+    lockFrame++;
+    const w = lockCanvas.width, h = lockCanvas.height;
+    if (Math.random() < 0.12) {
+      lockCanvas.style.opacity = "1";
+      drawVCRStatic(lockCtx, w, h, 0.015 + Math.random()*0.025);
+      setTimeout(()=>{ lockCanvas.style.opacity="0"; }, 60+Math.random()*80);
+    }
+    if (lockFrame%45===0 && Math.random()<0.55) {
+      lockCanvas.style.opacity = "1";
+      drawVCRStatic(lockCtx,w,h,0.04+Math.random()*0.06);
+      drawSliceGlitch(lockCtx,w,h);
+      setTimeout(()=>{ drawVCRStatic(lockCtx,w,h,0.02); setTimeout(()=>{ lockCanvas.style.opacity="0"; },50); },80);
+    }
+    if (lockFrame%90===0 && Math.random()<0.5) {
+      lockCanvas.style.opacity = "1";
+      drawVCRStatic(lockCtx,w,h,0.08+Math.random()*0.1);
+      drawSliceGlitch(lockCtx,w,h);
+      const logos = document.querySelectorAll(".bg-logo img,.bg-logo-r img,.bg-logo-b img");
+      logos.forEach(function(l){ l.style.transition="none"; l.style.transform="translate("+(Math.random()*16-8)+"px,"+(Math.random()*10-5)+"px) skewX("+(Math.random()*6-3)+"deg)"; });
+      setTimeout(function(){
+        drawVCRStatic(lockCtx,w,h,0.05); drawSliceGlitch(lockCtx,w,h);
+        logos.forEach(function(l){ l.style.transform="translate("+(Math.random()*10-5)+"px,0)"; });
+        setTimeout(function(){ lockCanvas.style.opacity="0"; logos.forEach(function(l){ l.style.transform=""; }); },60);
+      },100);
+    }
+    requestAnimationFrame(lockGlitchLoop);
+  }
+  lockGlitchLoop();
+
+  // Flyer screen glitch
+  const flyerCanvas = document.getElementById("flyer-vcr");
+  const flyerCtx = flyerCanvas.getContext("2d");
+  function resizeFlyerCanvas(){ flyerCanvas.width=window.innerWidth; flyerCanvas.height=window.innerHeight; }
+  resizeFlyerCanvas(); window.addEventListener("resize", function(){ resizeFlyerCanvas(); buildMirrorBg(); });
+
+  const fbar1 = document.getElementById("fbar1");
+  const fbar2 = document.getElementById("fbar2");
+  const flyerCard = document.querySelector(".flyer-container");
+
+  let flyerFrame = 0;
+  function flyerGlitchLoop() {
+    flyerFrame++;
+    const w = flyerCanvas.width, h = flyerCanvas.height;
+    if (Math.random()<0.07) {
+      flyerCanvas.style.opacity="1";
+      drawVCRStatic(flyerCtx,w,h,0.01+Math.random()*0.02);
+      setTimeout(()=>{ flyerCanvas.style.opacity="0"; },50+Math.random()*60);
+    }
+    if (flyerFrame%60===0 && Math.random()<0.5) {
+      const bar = Math.random()>0.5 ? fbar1 : fbar2;
+      bar.style.height=(2+Math.random()*8)+"px"; bar.style.opacity="0.5"; bar.style.top="-20px";
+      bar.style.background=Math.random()>0.7?"rgba(255,255,255,0.6)":"rgba(0,0,0,0.8)";
+      const dur=800+Math.random()*600, start=performance.now();
+      (function sweep(now){ const p=(now-start)/dur; if(p<1){ bar.style.top=((-20)+p*(h+40))+"px"; requestAnimationFrame(sweep); } else { bar.style.opacity="0"; } })(performance.now());
+    }
+    if (flyerFrame%80===0 && Math.random()<0.45) {
+      flyerCanvas.style.opacity="1";
+      drawVCRStatic(flyerCtx,w,h,0.03+Math.random()*0.05); drawSliceGlitch(flyerCtx,w,h);
+      flyerCard.style.transition="none"; flyerCard.style.transform="translate("+(Math.random()*8-4)+"px,"+(Math.random()*4-2)+"px)";
+      setTimeout(function(){ flyerCard.style.transform="translate("+(Math.random()*6-3)+"px,0)"; drawVCRStatic(flyerCtx,w,h,0.015); setTimeout(function(){ flyerCanvas.style.opacity="0"; flyerCard.style.transform=""; },60); },80);
+    }
+    if (flyerFrame%150===0 && Math.random()<0.4) {
+      flyerCanvas.style.opacity="1";
+      drawVCRStatic(flyerCtx,w,h,0.07+Math.random()*0.08); drawSliceGlitch(flyerCtx,w,h);
+      const mirror=document.getElementById("flyer-mirror"), bgImg=document.getElementById("flyer-bg-img");
+      mirror.style.opacity="0.35"; mirror.style.filter="hue-rotate("+Math.floor(Math.random()*360)+"deg) brightness(0.6)";
+      bgImg.style.filter="blur(28px) brightness(0.4) saturate(1.2) contrast(1.6) hue-rotate("+Math.floor(Math.random()*60)+"deg)";
+      flyerCard.style.transform="translate("+(Math.random()*14-7)+"px,"+(Math.random()*8-4)+"px) skewX("+(Math.random()*3-1.5)+"deg)";
+      setTimeout(function(){
+        drawVCRStatic(flyerCtx,w,h,0.04); flyerCard.style.transform="translate("+(Math.random()*6-3)+"px,0)";
+        setTimeout(function(){ flyerCanvas.style.opacity="0"; flyerCard.style.transform=""; mirror.style.opacity="0.18"; mirror.style.filter=""; bgImg.style.filter="blur(28px) brightness(0.25) saturate(0.4) contrast(1.4)"; },70);
+      },110);
+    }
+    requestAnimationFrame(flyerGlitchLoop);
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // JAX SKYLINE — PS2-style grid mesh on every building face
+  // Each face is a grid of squares like Spider-Man PS2
+  // ══════════════════════════════════════════════════════════════
+
+  const JAX_BUILDINGS = [
+    { x:0.08,  w:0.03, h:0.12 },
+    { x:0.12,  w:0.02, h:0.18 },
+    { x:0.16,  w:0.025,h:0.22 },
+    { x:0.20,  w:0.03, h:0.28 },
+    { x:0.24,  w:0.02, h:0.20 },
+    { x:0.29,  w:0.025,h:0.55, antenna:true },
+    { x:0.33,  w:0.02, h:0.30 },
+    { x:0.37,  w:0.03, h:0.38 },
+    { x:0.40,  w:0.02, h:0.25 },
+    { x:0.44,  w:0.03, h:0.62, antenna:true },
+    { x:0.47,  w:0.025,h:0.42 },
+    { x:0.51,  w:0.03, h:0.88, antenna:true, stepped:true },
+    { x:0.54,  w:0.025,h:0.55 },
+    { x:0.58,  w:0.03, h:0.72, antenna:true },
+    { x:0.62,  w:0.025,h:0.48 },
+    { x:0.65,  w:0.02, h:0.35 },
+    { x:0.68,  w:0.025,h:0.30 },
+    { x:0.72,  w:0.02, h:0.22 },
+    { x:0.76,  w:0.025,h:0.18 },
+    { x:0.80,  w:0.02, h:0.14 },
+    { x:0.84,  w:0.025,h:0.10 },
+    { x:0.88,  w:0.02, h:0.08 },
+  ];
+
+  const GRID_COLS = 24;
+  const GRID_ROWS = 16;
+  let skyR = 200, skyG = 200, skyB = 220;
+  let skylineCanvas = null, skyCtx = null;
+  let skyT = 0;
+  let skyRunning = false;
+
+  function initSkyline() {
+    skylineCanvas = document.getElementById('skyline-canvas');
+    skyCtx = skylineCanvas.getContext('2d');
+    resizeSkyline();
+    window.addEventListener('resize', resizeSkyline);
+  }
+  function resizeSkyline() {
+    if (!skylineCanvas) return;
+    skylineCanvas.width  = window.innerWidth;
+    skylineCanvas.height = window.innerHeight;
+  }
+  function updateSkylineColor(r, g, b) { skyR = r; skyG = g; skyB = b; }
+
+  function project(x, y, z, cam) {
+    var dx = x - cam.x, dy = y - cam.y, dz = z - cam.z;
+    var cy = Math.cos(cam.yaw),   sy = Math.sin(cam.yaw);
+    var cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch);
+    var rx  =  dx * cy + dz * sy;
+    var rz  = -dx * sy + dz * cy;
+    var ry2 =  dy * cp - rz * sp;
+    var rz2 =  dy * sp + rz * cp;
+    if (rz2 <= 0.5) return null;
+    var fov = Math.min(skylineCanvas.width, skylineCanvas.height) * 0.9;
+    var sx  = (rx / rz2) * fov + skylineCanvas.width  / 2;
+    var sy2 = (ry2/ rz2) * fov + skylineCanvas.height / 2;
+    return [sx, sy2, rz2];
+  }
+
+  // Draw a single line segment in 3D
+  function line3D(ax,ay,az, bx,by,bz, cam, alpha, lw) {
+    var pa = project(ax,ay,az,cam), pb = project(bx,by,bz,cam);
+    if (!pa || !pb) return;
+    var avgD = (pa[2]+pb[2])*0.5;
+    var fade = Math.max(0, Math.min(1, 1-(avgD-1)/320));
+    var a = alpha * fade;
+    if (a < 0.008) return;
+    skyCtx.beginPath();
+    skyCtx.strokeStyle = 'rgba('+skyR+','+skyG+','+skyB+','+a+')';
+    skyCtx.lineWidth = lw * Math.max(0.3, fade);
+    skyCtx.moveTo(pa[0], pa[1]);
+    skyCtx.lineTo(pb[0], pb[1]);
+    skyCtx.stroke();
+  }
+
+  // Draw a grid-meshed rectangular face in 3D
+  // p1..p4 are the four corners [x,y,z] going around the face
+  // gridU = subdivisions along u axis, gridV = subdivisions along v axis
+  function meshFace(p1, p2, p3, p4, cam, alpha, gridU, gridV) {
+    // p1=top-left, p2=top-right, p3=bottom-right, p4=bottom-left
+    // Draw grid lines along U
+    for (var i = 0; i <= gridU; i++) {
+      var t = i / gridU;
+      // Interpolate top edge p1->p2 and bottom edge p4->p3
+      var tx0 = p1[0] + (p2[0]-p1[0])*t, ty0 = p1[1] + (p2[1]-p1[1])*t, tz0 = p1[2] + (p2[2]-p1[2])*t;
+      var tx1 = p4[0] + (p3[0]-p4[0])*t, ty1 = p4[1] + (p3[1]-p4[1])*t, tz1 = p4[2] + (p3[2]-p4[2])*t;
+      line3D(tx0,ty0,tz0, tx1,ty1,tz1, cam, alpha, 0.5);
+    }
+    // Draw grid lines along V
+    for (var j = 0; j <= gridV; j++) {
+      var s = j / gridV;
+      // Interpolate left edge p1->p4 and right edge p2->p3
+      var sx0 = p1[0] + (p4[0]-p1[0])*s, sy0 = p1[1] + (p4[1]-p1[1])*s, sz0 = p1[2] + (p4[2]-p1[2])*s;
+      var sx1 = p2[0] + (p3[0]-p2[0])*s, sy1 = p2[1] + (p3[1]-p2[1])*s, sz1 = p2[2] + (p3[2]-p2[2])*s;
+      line3D(sx0,sy0,sz0, sx1,sy1,sz1, cam, alpha, 0.5);
+    }
+  }
+
+  // Draw one building as a PS2-style grid mesh box
+  function drawMeshBuilding(b, cam) {
+    var CITY_W = 380, CITY_Z = 0, MAX_H = 200, BASE_Y = 40, DEPTH_W = 28;
+    var bx   = (b.x - 0.5) * CITY_W;
+    var bw   = b.w * CITY_W;
+    var bh   = b.h * MAX_H;
+    var topY = BASE_Y - bh;
+    var bz0  = CITY_Z - DEPTH_W/2;
+    var bz1  = CITY_Z + DEPTH_W/2;
+    var bx0  = bx - bw/2;
+    var bx1  = bx + bw/2;
+
+    // Grid density — more grid lines on taller buildings
+    var gridH = Math.max(2, Math.round(b.h * 14));
+    var gridW = Math.max(2, Math.round(b.w * 12));
+    var gridD = 3;
+    var alpha = 0.5;
+
+    // Front face (bz0): corners top-left, top-right, bot-right, bot-left
+    meshFace(
+      [bx0, topY, bz0], [bx1, topY, bz0],
+      [bx1, BASE_Y, bz0], [bx0, BASE_Y, bz0],
+      cam, alpha, gridW, gridH
+    );
+    // Back face (bz1)
+    meshFace(
+      [bx0, topY, bz1], [bx1, topY, bz1],
+      [bx1, BASE_Y, bz1], [bx0, BASE_Y, bz1],
+      cam, alpha * 0.5, gridW, gridH
+    );
+    // Left face
+    meshFace(
+      [bx0, topY, bz0], [bx0, topY, bz1],
+      [bx0, BASE_Y, bz1], [bx0, BASE_Y, bz0],
+      cam, alpha * 0.7, gridD, gridH
+    );
+    // Right face
+    meshFace(
+      [bx1, topY, bz0], [bx1, topY, bz1],
+      [bx1, BASE_Y, bz1], [bx1, BASE_Y, bz0],
+      cam, alpha * 0.7, gridD, gridH
+    );
+    // Top face
+    meshFace(
+      [bx0, topY, bz0], [bx1, topY, bz0],
+      [bx1, topY, bz1], [bx0, topY, bz1],
+      cam, alpha * 0.6, gridW, gridD
+    );
+
+    // Antenna for tall buildings
+    if (b.antenna) {
+      var antH = bh * 0.12;
+      var antX = (bx0+bx1)/2, antZ = (bz0+bz1)/2;
+      line3D(antX, topY, antZ, antX, topY-antH, antZ, cam, 0.8, 1.0);
+      // Blinking tip
+      var blink = Math.sin(skyT * 4 + b.x * 10) > 0.85 ? 0.9 : 0.0;
+      if (blink > 0) {
+        var tp = project(antX, topY-antH, antZ, cam);
+        if (tp) {
+          skyCtx.beginPath();
+          skyCtx.arc(tp[0], tp[1], 2.5, 0, Math.PI*2);
+          skyCtx.fillStyle = 'rgba('+skyR+','+skyG+','+skyB+','+blink+')';
+          skyCtx.fill();
+        }
+      }
+    }
+
+    // Stepped setback for tallest building
+    if (b.stepped) {
+      var s1y = topY + bh * 0.2;
+      var s1x0 = bx - bw*0.35, s1x1 = bx + bw*0.35;
+      meshFace(
+        [s1x0, topY, bz0], [s1x1, topY, bz0],
+        [s1x1, s1y,  bz0], [s1x0, s1y,  bz0],
+        cam, alpha * 0.4, 2, 2
+      );
+    }
+  }
+
+  function skylineLoop() {
+    if (!skyCtx || !skylineCanvas || !skyRunning) return;
+    skyT += 0.004;
+
+    var W = skylineCanvas.width, H = skylineCanvas.height;
+    skyCtx.clearRect(0, 0, W, H);
+
+    // Camera orbit — slow cinematic flythrough
+    var orbitR  = 260 + Math.sin(skyT * 0.3) * 50;
+    var orbitH  = -110 + Math.sin(skyT * 0.5) * 35;
+    var orbitA  = skyT * 0.2;
+
+    var cam = {
+      x:     Math.cos(orbitA) * orbitR,
+      y:     orbitH,
+      z:     Math.sin(orbitA) * orbitR,
+      yaw:   orbitA + Math.PI + Math.sin(skyT*0.4)*0.06,
+      pitch: 0.16 + Math.sin(skyT * 0.5) * 0.05
+    };
+
+    // ── GROUND GRID (PS2 floor plane) ──────────────────────────
+    var GW = 520, GD = 520, GY = 40;
+    var GCols = 22, GRows = 18;
+    var gA = 0.12;
+    for (var i = 0; i <= GCols; i++) {
+      var gx = -GW/2 + (i/GCols)*GW;
+      line3D(gx, GY, -GD/2, gx, GY, GD/2, cam, gA, 0.5);
+    }
+    for (var j = 0; j <= GRows; j++) {
+      var gz = -GD/2 + (j/GRows)*GD;
+      line3D(-GW/2, GY, gz, GW/2, GY, gz, cam, gA, 0.5);
+    }
+
+    // ── BUILDINGS as PS2 grid mesh boxes ───────────────────────
+    JAX_BUILDINGS.forEach(function(b) {
+      drawMeshBuilding(b, cam);
+    });
+
+    // ── BRIDGE (Main St) as mesh ────────────────────────────────
+    var brY = 40, brZ0 = -55, brZ1 = -35;
+    meshFace(
+      [-90, brY, brZ0], [90, brY, brZ0],
+      [90,  brY, brZ1], [-90, brY, brZ1],
+      cam, 0.1, 12, 2
+    );
+    // Bridge towers
+    line3D(0, brY, (brZ0+brZ1)/2, 0, brY-60, (brZ0+brZ1)/2, cam, 0.25, 0.8);
+    for (var k = -5; k <= 5; k++) {
+      line3D(k*16, brY, (brZ0+brZ1)/2, 0, brY-58, (brZ0+brZ1)/2, cam, 0.08, 0.3);
+    }
+
+    requestAnimationFrame(skylineLoop);
+  }
+
+    function startFlyerGlitch(){
+    flyerGlitchLoop();
+    initSkyline();
+    skyRunning = true;
+    skylineCanvas.style.opacity = "1";
+    skylineLoop();
+    const fc = document.querySelector('.flyer-container');
+    if (fc) { fc.style.animationDelay = '0.2s,1.2s,1.7s'; }
+  }
+</script>
+</body>
+</html
+
+<!-- ── FLYER SCREEN ── -->
+<div id="flyer-screen">
+  <div id="flyer-bg"><img id="flyer-bg-img" alt=""></div>
+  <div id="flyer-mirror"></div>
+  <canvas id="flyer-mesh" style="position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:1;opacity:0;transition:opacity 1.4s;mix-blend-mode:color-dodge;"></canvas>
+  <canvas id="skyline-canvas"></canvas>
+  <canvas id="flyer-vcr"></canvas>
+  <div class="flyer-scanlines"></div>
+  <div class="flyer-bar" id="fbar1"></div>
+  <div class="flyer-bar" id="fbar2"></div>
+  <div class="flyer-vignette"></div>
+  <div class="access-badge fade-in">&#10003; Access Granted</div>
+  <button class="back-btn fade-in" onclick="returnToLock()">&#8592; LOCK SCREEN</button>
+  <div class="flyer-container fade-in">
+    <img id="flyer-img" alt="Duval Sound and Friends Flyer">
+  </div>
+</div>
+
+<!-- ── ADMIN SCREEN ── -->
+<div id="admin-screen">
+  <div class="admin-header fade-in">
+    <div class="admin-title">Admin Panel</div>
+    <div class="admin-badge">&#9650; Duval Sound</div>
+  </div>
+
+  <!-- Stats -->
+  <div class="admin-section fade-in">
+    <div class="section-label" style="justify-content:space-between;">
+      <span>// Live Stats</span>
+      <button onclick="renderAdminStats()" style="background:transparent;border:1px solid #333;color:#666;font-family:'Space Mono','Courier New',monospace;font-size:0.55rem;letter-spacing:0.15em;text-transform:uppercase;padding:0.2rem 0.6rem;cursor:pointer;transition:color 0.2s,border-color 0.2s;" onmouseover="this.style.color='#f5f0e8';this.style.borderColor='#666';" onmouseout="this.style.color='#666';this.style.borderColor='#333';">&#8635; REFRESH</button>
+    </div>
+    <div id="stats-status" style="font-size:0.55rem;letter-spacing:0.15em;color:#555;margin-bottom:1rem;text-transform:uppercase;"></div>
+    <div class="stats-grid">
+      <div class="stat-cell">
+        <div class="stat-value" id="stat-views">0</div>
+        <div class="stat-label">Total Views</div>
+        <div class="stat-delta" id="stat-today">+0 today</div>
+      </div>
+      <div class="stat-cell">
+        <div class="stat-value" id="stat-unlocks">0</div>
+        <div class="stat-label">Flyer Unlocks</div>
+        <div class="stat-delta" id="stat-unlocks-today">+0 today</div>
+      </div>
+      <div class="stat-cell">
+        <div class="stat-value" id="stat-fails">0</div>
+        <div class="stat-label">Failed Attempts</div>
+        <div class="stat-delta">&nbsp;</div>
+      </div>
+      <div class="stat-cell">
+        <div class="stat-value" id="stat-rate">0%</div>
+        <div class="stat-label">Unlock Rate</div>
+        <div class="stat-delta">&nbsp;</div>
+      </div>
+      <div class="stat-cell">
+        <div class="stat-value" id="stat-unique">0</div>
+        <div class="stat-label">Unique Visitors</div>
+        <div class="stat-delta" id="stat-unique-today">+0 today</div>
+      </div>
+      <div class="stat-cell">
+        <div class="stat-value" id="stat-unique-unlocks">0</div>
+        <div class="stat-label">Unique Unlocks</div>
+        <div class="stat-delta">&nbsp;</div>
+      </div>
+    </div>
+    <div class="chart-wrap">
+      <div class="chart-bars" id="chart-bars"></div>
+    </div>
+  </div>
+
+  <!-- Recent activity -->
+  <div class="admin-section fade-in">
+    <div class="section-label">// Recent Activity</div>
+    <ul class="activity-list" id="activity-list">
+      <li class="activity-item">
+        <span class="activity-event">No activity recorded yet</span>
+        <span class="activity-time">—</span>
+      </li>
+    </ul>
+  </div>
+
+  <!-- Flyer management -->
+  <div class="admin-section fade-in">
+    <div class="section-label">// Current Flyer</div>
+    <div class="current-flyer-wrap">
+      <img id="admin-flyer-preview" alt="Current Flyer">
+      <div class="current-flyer-label">Active flyer</div>
+    </div>
+  </div>
+
+  
 
   <div class="admin-footer fade-in">
     <button class="btn-logout" onclick="logout()">&#8592; Exit Admin</button>
@@ -831,7 +1793,6 @@
           document.getElementById("admin-screen").style.display = "flex";
           
           renderAdminStats();
-          renderPasswordList();
         }, 400);
 
       } else if (data.role === "user") {
@@ -896,37 +1857,49 @@
 
   // ── ADMIN STATS RENDER ────────────────────────────────────
   function renderAdminStats() {
-    // Show local stats immediately
-    const s = loadStats();
-    document.getElementById("stat-views").textContent   = s.views;
-    document.getElementById("stat-unlocks").textContent = s.unlocks;
-    document.getElementById("stat-fails").textContent   = s.fails;
-    document.getElementById("stat-today").textContent   = "+" + s.todayViews + " today";
-    document.getElementById("stat-unlocks-today").textContent = "+" + s.todayUnlocks + " today";
-    const rate = s.views > 0 ? Math.round((s.unlocks / s.views) * 100) : 0;
-    document.getElementById("stat-rate").textContent = rate + "%";
-    renderChart(s.weekChart || {});
-    renderActivity(s.history || []);
+    setStatsStatus("loading");
 
-    // Then fetch live totals from Google Sheets
     fetch("/.netlify/functions/get-stats")
       .then(function(r) { return r.json(); })
       .then(function(data) {
-        if (!data || data.error) return;
-        document.getElementById("stat-views").textContent   = data.views   || s.views;
-        document.getElementById("stat-unlocks").textContent = data.unlocks || s.unlocks;
-        document.getElementById("stat-fails").textContent   = data.fails   || s.fails;
-        document.getElementById("stat-today").textContent   = "+" + (data.todayViews   || s.todayViews)   + " today";
-        document.getElementById("stat-unlocks-today").textContent = "+" + (data.todayUnlocks || s.todayUnlocks) + " today";
+        if (data.error) {
+          setStatsStatus("error", data.error);
+          return;
+        }
+        // Populate all stat cells from live sheet data
+        document.getElementById("stat-views").textContent   = data.views   || 0;
+        document.getElementById("stat-unlocks").textContent = data.unlocks || 0;
+        document.getElementById("stat-fails").textContent   = data.fails   || 0;
+        document.getElementById("stat-today").textContent   = "+" + (data.todayViews   || 0) + " today";
+        document.getElementById("stat-unlocks-today").textContent = "+" + (data.todayUnlocks || 0) + " today";
         const liveRate = (data.views||0) > 0 ? Math.round(((data.unlocks||0) / (data.views||0)) * 100) : 0;
-        document.getElementById("stat-rate").textContent = liveRate + "%";
-        if (data.uniqueVisitors  !== undefined) document.getElementById("stat-unique").textContent         = data.uniqueVisitors;
-        if (data.uniqueUnlockers !== undefined) document.getElementById("stat-unique-unlocks").textContent = data.uniqueUnlockers;
-        if (data.todayUniqueVisitors !== undefined) document.getElementById("stat-unique-today").textContent = "+" + data.todayUniqueVisitors + " today";
+        document.getElementById("stat-rate").textContent    = liveRate + "%";
+        document.getElementById("stat-unique").textContent         = data.uniqueVisitors  || 0;
+        document.getElementById("stat-unique-unlocks").textContent = data.uniqueUnlockers || 0;
+        document.getElementById("stat-unique-today").textContent   = "+" + (data.todayUniqueVisitors || 0) + " today";
         if (data.weekChart)    renderChart(data.weekChart);
         if (data.recentEvents) renderActivity(data.recentEvents);
+        setStatsStatus("ok");
       })
-      .catch(function() {}); // silently fail — local stats still shown
+      .catch(function(err) {
+        setStatsStatus("error", "Connection error");
+      });
+  }
+
+  function setStatsStatus(state, msg) {
+    var el = document.getElementById("stats-status");
+    if (!el) return;
+    if (state === "loading") {
+      el.textContent = "// Fetching live data...";
+      el.style.color = "#555";
+    } else if (state === "ok") {
+      var now = new Date().toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"});
+      el.textContent = "// Last updated " + now;
+      el.style.color = "#2ecc71";
+    } else if (state === "error") {
+      el.textContent = "// " + (msg || "Could not fetch data") + " — check Netlify env vars";
+      el.style.color = "#e63329";
+    }
   }
 
   function renderChart(weekChart) {

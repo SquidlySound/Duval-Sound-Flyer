@@ -527,14 +527,23 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: 2rem 1.5rem 4rem;
+    justify-content: center;
+    padding: 7rem 1rem 3rem;
     min-height: 100vh;
     scroll-snap-align: start;
+    box-sizing: border-box;
   }
   #flyer-screen {
     scroll-snap-type: y mandatory;
   }
   .flyer-section .flyer-container {
+    /* Constrain flyer to fit viewport with padding for header/footer */
+    width: 100%;
+    max-width: min(420px, 88vw);
+    max-height: calc(100vh - 10rem);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
     animation: flyer-entrance 1s cubic-bezier(0.16,1,0.3,1) both,
                flyer-breathe 6s ease-in-out 1.2s infinite;
     opacity: 0;
@@ -543,6 +552,15 @@
   .flyer-section.active .flyer-container {
     opacity: 1;
   }
+  /* Flyer image sizing — always fully visible */
+  .flyer-section .flyer-container img {
+    width: 100%;
+    height: auto;
+    max-height: calc(100vh - 13rem);
+    object-fit: contain;
+    display: block;
+  }
+
   /* Scroll indicator between flyers */
   .scroll-hint {
     margin-top: 2rem;
@@ -719,7 +737,9 @@
   // Passwords are verified server-side via Netlify Function
   // ── FLYER CONFIG — add/remove filenames to manage active events ──
   const FLYERS = [
-    "flyer1.png"
+    "flyer1.png",
+    "flyer2.png",
+    "flyer3.png"
   ];
   const DEFAULT_FLYER = FLYERS[0];
   // ───────────────────────────────────────────────────────────

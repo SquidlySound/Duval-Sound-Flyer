@@ -490,15 +490,17 @@
   /* ── MULTI-FLYER LAYOUT ── */
   .flyer-header {
     position: fixed;
-    top: 2rem;
+    top: 1.2rem;
     left: 50%;
     transform: translateX(-50%);
     z-index: 20;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.3rem;
     pointer-events: none;
+    width: 90vw;
+    max-width: 600px;
   }
   .flyer-header .access-badge,
   .flyer-header .back-btn {
@@ -528,7 +530,7 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 7rem 1rem 3rem;
+    padding: 9rem 1rem 3rem;
     min-height: 100vh;
     scroll-snap-align: start;
     box-sizing: border-box;
@@ -540,7 +542,7 @@
     /* Constrain flyer to fit viewport with padding for header/footer */
     width: 100%;
     max-width: min(420px, 88vw);
-    max-height: calc(100vh - 10rem);
+    max-height: calc(100vh - 12rem);
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -556,9 +558,52 @@
   .flyer-section .flyer-container img {
     width: 100%;
     height: auto;
-    max-height: calc(100vh - 13rem);
+    max-height: calc(100vh - 15rem);
     object-fit: contain;
     display: block;
+  }
+
+  /* Follow the Sound title */
+  .follow-title {
+    font-family: 'Orbitron', 'Courier New', monospace;
+    font-size: clamp(1rem, 4.5vw, 2rem);
+    font-weight: 900;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--theme-primary, #f5f0e8);
+    margin: 0.3rem 0;
+    text-align: center;
+    line-height: 1;
+    position: relative;
+    text-shadow:
+      0 0 10px var(--theme-glow, rgba(245,240,232,0.3)),
+      0 0 30px var(--theme-glow, rgba(245,240,232,0.15));
+    animation:
+      title-flicker 8s infinite,
+      title-rgb 8s infinite;
+    transition: color 1.2s, text-shadow 1.2s;
+  }
+  @keyframes title-flicker {
+    0%,72%,100% { opacity:1; }
+    73%  { opacity:0.85; }
+    73.5%{ opacity:1; }
+    74%  { opacity:0.6; }
+    74.3%{ opacity:1; }
+    82%  { opacity:0.9; }
+    82.2%{ opacity:1; }
+    90%  { opacity:0.7; }
+    90.1%{ opacity:1; }
+  }
+  @keyframes title-rgb {
+    0%,70%,100% { text-shadow: 0 0 10px var(--theme-glow,rgba(245,240,232,0.3)), 0 0 30px var(--theme-glow,rgba(245,240,232,0.1)); transform: translate(0,0); }
+    71%  { text-shadow: -4px 0 rgba(255,0,80,0.8), 4px 0 rgba(0,220,255,0.8); transform: translate(-2px, 0) skewX(-1deg); }
+    71.5%{ text-shadow: 4px 0 rgba(255,0,80,0.8), -4px 0 rgba(0,220,255,0.8); transform: translate(2px, 0) skewX(1deg); }
+    72%  { text-shadow: 0 0 10px var(--theme-glow,rgba(245,240,232,0.3)); transform: translate(0,0); }
+    83%  { text-shadow: -3px 0 rgba(255,0,80,0.6), 3px 0 rgba(0,220,255,0.6); transform: translate(-1px,0); }
+    83.3%{ text-shadow: 0 0 10px var(--theme-glow,rgba(245,240,232,0.3)); transform: translate(0,0); }
+    91%  { text-shadow: 5px 0 rgba(255,0,80,0.9), -5px 0 rgba(0,220,255,0.9); transform: translate(-3px,0) skewX(-2deg); }
+    91.3%{ text-shadow: -5px 0 rgba(255,0,80,0.9), 5px 0 rgba(0,220,255,0.9); transform: translate(3px,0) skewX(2deg); }
+    91.6%{ text-shadow: 0 0 10px var(--theme-glow,rgba(245,240,232,0.3)); transform: translate(0,0); }
   }
 
   /* Scroll indicator between flyers */
@@ -588,7 +633,52 @@
     transition: color 1s;
   }
 
+
+  /* ── FOLLOW THE SOUND TITLE ── */
+  .follow-title {
+    font-family: 'Orbitron', 'Courier New', monospace;
+    font-size: clamp(1rem, 4.5vw, 2rem);
+    font-weight: 900;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--theme-primary, #f5f0e8);
+    margin: 0.2rem 0;
+    text-align: center;
+    line-height: 1;
+    text-shadow:
+      0 0 10px var(--theme-glow, rgba(245,240,232,0.3)),
+      0 0 30px var(--theme-glow, rgba(245,240,232,0.15));
+    animation: title-flicker 8s infinite, title-rgb 8s infinite;
+    transition: color 1.2s, text-shadow 1.2s;
+  }
+  @keyframes title-flicker {
+    0%,72%,100% { opacity:1; }
+    73%   { opacity:0.7; }
+    73.5% { opacity:1; }
+    74%   { opacity:0.5; }
+    74.3% { opacity:1; }
+    82%   { opacity:0.85; }
+    82.2% { opacity:1; }
+    90%   { opacity:0.6; }
+    90.1% { opacity:1; }
+  }
+  @keyframes title-rgb {
+    0%,70%,100% {
+      text-shadow: 0 0 10px var(--theme-glow,rgba(245,240,232,0.3));
+      transform: translate(0,0);
+    }
+    71%   { text-shadow: -4px 0 rgba(255,0,80,0.8), 4px 0 rgba(0,220,255,0.8); transform: translate(-2px,0) skewX(-1deg); }
+    71.5% { text-shadow: 4px 0 rgba(255,0,80,0.8), -4px 0 rgba(0,220,255,0.8); transform: translate(2px,0) skewX(1deg); }
+    72%   { text-shadow: 0 0 10px var(--theme-glow,rgba(245,240,232,0.3)); transform: translate(0,0); }
+    83%   { text-shadow: -3px 0 rgba(255,0,80,0.6), 3px 0 rgba(0,220,255,0.6); transform: translate(-1px,0); }
+    83.3% { text-shadow: 0 0 10px var(--theme-glow,rgba(245,240,232,0.3)); transform: translate(0,0); }
+    91%   { text-shadow: 5px 0 rgba(255,0,80,0.9), -5px 0 rgba(0,220,255,0.9); transform: translate(-3px,0) skewX(-2deg); }
+    91.3% { text-shadow: -5px 0 rgba(255,0,80,0.9), 5px 0 rgba(0,220,255,0.9); transform: translate(3px,0) skewX(2deg); }
+    91.6% { text-shadow: 0 0 10px var(--theme-glow,rgba(245,240,232,0.3)); transform: translate(0,0); }
+  }
+
 </style>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
 </head>
 <body>
 
@@ -636,6 +726,7 @@
   <!-- Fixed header -->
   <div class="flyer-header fade-in">
     <div class="access-badge">&#10003; Access Granted</div>
+    <h1 class="follow-title" id="follow-title">FOLLOW THE SOUND</h1>
     <button class="back-btn" onclick="returnToLock()">&#8592; LOCK SCREEN</button>
   </div>
   <!-- Scrollable sections built by JS -->
@@ -737,7 +828,9 @@
   // Passwords are verified server-side via Netlify Function
   // ── FLYER CONFIG — add/remove filenames to manage active events ──
   const FLYERS = [
-    "flyer1.png"
+    "flyer1.png",
+    "flyer2.png",
+    "flyer3.png"
   ];
   const DEFAULT_FLYER = FLYERS[0];
   // ───────────────────────────────────────────────────────────

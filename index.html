@@ -489,23 +489,18 @@
 
   /* ── MULTI-FLYER LAYOUT ── */
   .flyer-header {
-    position: fixed;
-    top: 1.2rem;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 20;
+    position: relative;
+    z-index: 11;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 0.3rem;
-    pointer-events: none;
-    width: 90vw;
-    max-width: 600px;
+    gap: 0.4rem;
+    width: 100%;
+    max-width: min(520px, 90vw);
+    margin-bottom: 1.2rem;
+    padding-top: 0.5rem;
   }
-  .flyer-header .access-badge,
-  .flyer-header .back-btn {
-    pointer-events: all;
-  }
+
   .flyer-header .access-badge {
     margin-bottom: 0;
     font-size: 0.6rem;
@@ -523,14 +518,14 @@
     position: relative;
     z-index: 10;
     width: 100%;
-    padding-top: 6rem; /* clear the fixed header */
+    padding-top: 0;
   }
   .flyer-section {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 9rem 1rem 3rem;
+    padding: 2rem 1rem 3rem;
     min-height: 100vh;
     scroll-snap-align: start;
     box-sizing: border-box;
@@ -723,12 +718,7 @@
   <!-- Ghost flash canvases -->
   <canvas id="ghost-ds-canvas" class="ghost-flash" style="width:clamp(120px,22vw,280px);height:clamp(120px,22vw,280px);"></canvas>
   <canvas id="ghost-squid-canvas" class="ghost-flash" style="width:clamp(100px,18vw,240px);height:clamp(100px,18vw,240px);"></canvas>
-  <!-- Fixed header -->
-  <div class="flyer-header fade-in">
-    <div class="access-badge">&#10003; Access Granted</div>
-    <h1 class="follow-title" id="follow-title">FOLLOW THE SOUND</h1>
-    <button class="back-btn" onclick="returnToLock()">&#8592; LOCK SCREEN</button>
-  </div>
+
   <!-- Scrollable sections built by JS -->
   <div id="flyer-sections"></div>
 </div>
@@ -828,7 +818,9 @@
   // Passwords are verified server-side via Netlify Function
   // ── FLYER CONFIG — add/remove filenames to manage active events ──
   const FLYERS = [
-    "flyer1.png"
+    "flyer1.png",
+    "flyer2.png",
+    "flyer3.png"
   ];
   const DEFAULT_FLYER = FLYERS[0];
   // ───────────────────────────────────────────────────────────
@@ -927,6 +919,17 @@
       section.className = "flyer-section" + (i === 0 ? " active" : "");
       section.dataset.index = i;
       section.dataset.src = src;
+
+      // Inject title + back button into first flyer section only
+      if (i === 0) {
+        var header = document.createElement("div");
+        header.className = "flyer-header fade-in";
+        header.innerHTML =
+          "<div class='access-badge'>&#10003; Access Granted</div>" +
+          "<h1 class='follow-title'>FOLLOW THE SOUND</h1>" +
+          "<button class='back-btn' onclick='returnToLock()'>&#8592; LOCK SCREEN</button>";
+        section.appendChild(header);
+      }
 
       var label = document.createElement("div");
       label.className = "flyer-label";

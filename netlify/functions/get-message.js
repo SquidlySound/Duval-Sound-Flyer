@@ -1,10 +1,14 @@
 // netlify/functions/get-message.js
-// Returns the current guest message from Google Sheets
+// Returns the guest message for a specific flyer
+// Query param: ?flyer=1 (defaults to 1)
 
 const { google } = require("googleapis");
 
 exports.handler = async function(event) {
   try {
+    const flyerNum = parseInt(event.queryStringParameters && event.queryStringParameters.flyer || "1", 10);
+    const tabName = "Message" + flyerNum;
+
     const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
     const auth = new google.auth.GoogleAuth({
       credentials,
@@ -14,10 +18,9 @@ exports.handler = async function(event) {
     const sheets = google.sheets({ version: "v4", auth });
     const spreadsheetId = process.env.GOOGLE_SHEET_ID;
 
-    // Read from Message tab, cell A2 (A1 is header)
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: "Message!A2",
+      range: tabName + "!A2",
     });
 
     const rows = response.data.values || [];
@@ -29,7 +32,6 @@ exports.handler = async function(event) {
       body: JSON.stringify({ message }),
     };
   } catch (e) {
-    // If the Message tab doesn't exist yet, return empty message
     if (e.message && e.message.includes("Unable to parse range")) {
       return {
         statusCode: 200,

@@ -804,7 +804,10 @@
     </select>
     <textarea class="msg-textarea" id="msg-textarea" placeholder="Enter message for this flyer..." maxlength="500" oninput="updateMsgCount()"></textarea>
     <div class="msg-char-count"><span id="msg-count">0</span>/500</div>
-    <button class="msg-save-btn" onclick="saveMessage()">SAVE MESSAGE</button>
+    <div style="display:flex;gap:0.5rem;margin-top:0.75rem;">
+      <button class="msg-save-btn" onclick="saveMessage()" style="flex:2;">SAVE</button>
+      <button class="msg-save-btn" onclick="clearMessage()" style="flex:1;background:transparent;color:var(--white);border:1px solid #444;font-size:0.9rem;">CLEAR</button>
+    </div>
     <div id="msg-status"></div>
   </div>
 
@@ -816,9 +819,22 @@
 <script>
   // ── CONFIG ─────────────────────────────────────────────────
   // Passwords are verified server-side via Netlify Function
+  // ── ADMIN DISPLAY NAMES ──────────────────────────────────────
+  const ADMIN_NAMES = {
+    "squidlysound":  "Squidly",
+    "desty":         "Desty",
+    "lesbreehonest": "Lesbreehonest",
+    "kryptid":       "Kryptid",
+    "bracci":        "Bracci",
+    "oracle":        "Oracle"
+  };
+  var currentAdminPassword = ""; // set on login, used to tag messages
+
   // ── FLYER CONFIG — add/remove filenames to manage active events ──
   const FLYERS = [
-    "flyer1.png"
+    "flyer1.png",
+    "flyer2.png",
+    "flyer3.png"
   ];
   const DEFAULT_FLYER = FLYERS[0];
   // ───────────────────────────────────────────────────────────
@@ -1296,7 +1312,7 @@
       btn.disabled = false;
 
       if (data.role === "admin") {
-        // Store passwords returned from server for display in admin panel
+        currentAdminPassword = raw; // store for message tagging
         if (data.userPasswords)  USER_PASSWORDS  = data.userPasswords;
         if (data.adminPasswords) ADMIN_PASSWORDS = data.adminPasswords;
         recordEvent("unlock");
@@ -1996,39 +2012,76 @@
     fetch("/.netlify/functions/get-message?flyer=" + (idx + 1))
       .then(function(r) { return r.json(); })
       .then(function(data) {
-        if (data && data.message !== undefined) {
-          messageCache[key] = data.message;
-          renderConsoleMessageForFlyer(data.message, idx);
+        if (data && data.messages !== undefined) {
+          messageCache[key] = data.messages;
+          renderConsoleMessageForFlyer(data.messages, idx);
         }
       })
       .catch(function() {});
   }
 
-  function renderConsoleMessageForFlyer(text, idx) {
+  function renderConsoleMessageForFlyer(messages, idx) {
     var wrap = document.getElementById("console-wrap-" + idx);
     var linesEl = document.getElementById("console-lines-" + idx);
     if (!wrap || !linesEl) return;
     linesEl.innerHTML = "";
-    if (!text || !text.trim()) { wrap.style.display = "none"; return; }
+
+    // messages can be array of {name, message} or a plain string (legacy)
+    var entries = [];
+    if (Array.isArray(messages)) {
+      entries = messages.filter(function(m) { return m.message && m.message.trim(); });
+    } else if (typeof messages === "string" && messages.trim()) {
+      entries = [{ name: null, message: messages }];
+    }
+
+    if (!entries.length) { wrap.style.display = "none"; return; }
     wrap.style.display = "block";
-    var lines = text.split("\n").filter(function(l) { return l.trim(); });
-    lines.forEach(function(line, i) {
-      var lineEl = document.createElement("div");
-      lineEl.className = "console-line";
-      var prompt = document.createElement("span");
-      prompt.className = "console-prompt";
-      prompt.textContent = ">";
-      var textNode = document.createElement("span");
-      textNode.textContent = line;
-      lineEl.appendChild(prompt);
-      lineEl.appendChild(textNode);
-      if (i === lines.length - 1) {
-        var cursor = document.createElement("span");
-        cursor.className = "console-cursor";
-        lineEl.appendChild(cursor);
+
+    var lineIdx = 0;
+    entries.forEach(function(entry) {
+      // Name header line
+      if (entry.name) {
+        var nameEl = document.createElement("div");
+        nameEl.className = "console-line";
+        var namePrompt = document.createElement("span");
+        namePrompt.className = "console-prompt";
+        namePrompt.textContent = "//";
+        var nameText = document.createElement("span");
+        nameText.textContent = " " + entry.name;
+        nameText.style.opacity = "0.5";
+        nameText.style.fontSize = "0.8em";
+        nameEl.appendChild(namePrompt);
+        nameEl.appendChild(nameText);
+        linesEl.appendChild(nameEl);
+        (function(el, delay) {
+          setTimeout(function() { el.classList.add("visible"); }, delay);
+        })(nameEl, 400 + lineIdx * 500);
+        lineIdx++;
       }
-      linesEl.appendChild(lineEl);
-      setTimeout(function() { lineEl.classList.add("visible"); }, 400 + i * 600);
+      // Message lines
+      var lines = entry.message.split("\n").filter(function(l) { return l.trim(); });
+      lines.forEach(function(line, li) {
+        var lineEl = document.createElement("div");
+        lineEl.className = "console-line";
+        var prompt = document.createElement("span");
+        prompt.className = "console-prompt";
+        prompt.textContent = ">";
+        var textNode = document.createElement("span");
+        textNode.textContent = " " + line;
+        lineEl.appendChild(prompt);
+        lineEl.appendChild(textNode);
+        var isLast = (li === lines.length - 1);
+        if (isLast) {
+          var cursor = document.createElement("span");
+          cursor.className = "console-cursor";
+          lineEl.appendChild(cursor);
+        }
+        linesEl.appendChild(lineEl);
+        (function(el, delay) {
+          setTimeout(function() { el.classList.add("visible"); }, delay);
+        })(lineEl, 400 + lineIdx * 500);
+        lineIdx++;
+      });
     });
   }
 
@@ -2052,13 +2105,21 @@
   function loadAdminMessageForFlyer() {
     var sel = document.getElementById("msg-flyer-select");
     var flyerNum = sel ? parseInt(sel.value, 10) : 1;
-    fetch("/.netlify/functions/get-message?flyer=" + flyerNum)
+    fetch("/.netlify/functions/get-message?flyer=" + flyerNum + "&admin=" + encodeURIComponent(currentAdminPassword))
       .then(function(r) { return r.json(); })
       .then(function(data) {
         var ta = document.getElementById("msg-textarea");
-        if (ta && data && data.message !== undefined) {
-          ta.value = data.message;
+        if (ta) {
+          ta.value = (data && data.adminMessage !== undefined) ? data.adminMessage : "";
           updateMsgCount();
+        }
+        // Show display name
+        var displayName = ADMIN_NAMES[currentAdminPassword.toLowerCase()] || currentAdminPassword;
+        var statusEl = document.getElementById("msg-status");
+        if (statusEl) {
+          statusEl.textContent = "// Editing as: " + displayName;
+          statusEl.className = "ok";
+          statusEl.style.display = "block";
         }
       })
       .catch(function() {});
@@ -2075,7 +2136,7 @@
     fetch("/.netlify/functions/set-message", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: text, flyer: flyerNum })
+      body: JSON.stringify({ message: text, flyer: flyerNum, password: currentAdminPassword })
     })
     .then(function(r) { return r.json(); })
     .then(function(data) {
@@ -2096,6 +2157,41 @@
     .catch(function() {
       btn.textContent = "SAVE MESSAGE";
       btn.disabled = false;
+      statusEl.textContent = "✗ Connection error";
+      statusEl.className = "err";
+      statusEl.style.display = "block";
+    });
+  }
+
+  function clearMessage() {
+    var sel = document.getElementById("msg-flyer-select");
+    var flyerNum = sel ? parseInt(sel.value, 10) : 1;
+    var statusEl = document.getElementById("msg-status");
+    var btn = document.querySelector(".msg-save-btn");
+    fetch("/.netlify/functions/set-message", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: "", flyer: flyerNum, password: currentAdminPassword })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.success) {
+        document.getElementById("msg-textarea").value = "";
+        updateMsgCount();
+        statusEl.textContent = "✓ Message cleared";
+        statusEl.className = "ok";
+        statusEl.style.display = "block";
+        setTimeout(function(){ statusEl.style.display = "none"; }, 3000);
+        // Clear from cache so guest view reloads
+        var key = "message" + flyerNum;
+        delete messageCache[key];
+      } else {
+        statusEl.textContent = "✗ " + (data.error || "Failed to clear");
+        statusEl.className = "err";
+        statusEl.style.display = "block";
+      }
+    })
+    .catch(function() {
       statusEl.textContent = "✗ Connection error";
       statusEl.className = "err";
       statusEl.style.display = "block";

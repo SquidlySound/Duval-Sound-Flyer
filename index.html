@@ -889,10 +889,9 @@
   var currentAdminPassword = ""; // set on login, used to tag messages
 
   // ── FLYER CONFIG — add/remove filenames to manage active events ──
-  const FLYERS = [
-    "flyer1.png"
-  ];
-  const DEFAULT_FLYER = FLYERS[0];
+  // FLYERS loaded dynamically from flyers.json — edit that file to manage media
+  var FLYERS = [];
+  const DEFAULT_FLYER = "flyer1.png"; // admin preview fallback
   // ───────────────────────────────────────────────────────────
 
   // Runtime flyer src (can be replaced by admin upload)
@@ -973,11 +972,14 @@
 
   function applyFlyerSrc(src) {
     currentFlyerSrc = src;
-    document.getElementById("flyer-bg-img").src = src;
-    if (document.getElementById("admin-flyer-preview")) {
-      document.getElementById("admin-flyer-preview").src = src;
+    var isVideo = /\.(mp4|webm|mov)$/i.test(src);
+    if (!isVideo) {
+      document.getElementById("flyer-bg-img").src = src;
+      if (document.getElementById("admin-flyer-preview")) {
+        document.getElementById("admin-flyer-preview").src = src;
+      }
+      try { extractFlyerColors(src); } catch(e) {}
     }
-    try { extractFlyerColors(src); } catch(e) {}
   }
 
   function buildFlyerSections() {
@@ -1020,14 +1022,29 @@
         ghosts.appendChild(gd);
       }
 
-      var img = document.createElement("img");
-      img.src = src;
-      img.alt = "Event Flyer " + (i+1);
-      img.id = "flyer-img-" + i;
-      img.style.cssText = "width:100%;display:block;animation:vcr-distort 5s 2s infinite;";
-
-      flyerWrap.appendChild(ghosts);
-      flyerWrap.appendChild(img);
+      var isVideo = /\.(mp4|webm|mov)$/i.test(src);
+      var media;
+      if (isVideo) {
+        media = document.createElement("video");
+        media.src = src;
+        media.autoplay = true;
+        media.loop = true;
+        media.muted = true;
+        media.playsInline = true;
+        media.controls = false;
+        media.id = "flyer-img-" + i;
+        media.style.cssText = "width:100%;display:block;max-height:calc(100vh - 15rem);object-fit:contain;";
+        // Videos don't get ghost clones or VCR distortion
+        flyerWrap.appendChild(media);
+      } else {
+        var img = document.createElement("img");
+        img.src = src;
+        img.alt = "Event Flyer " + (i+1);
+        img.id = "flyer-img-" + i;
+        img.style.cssText = "width:100%;display:block;animation:vcr-distort 5s 2s infinite;";
+        flyerWrap.appendChild(ghosts);
+        flyerWrap.appendChild(img);
+      }
 
       var cw = document.createElement("div");
       cw.id = "console-wrap-" + i;
@@ -1060,10 +1077,13 @@
     });
     document.getElementById("flyer-bg-img").src = src;
     currentFlyerSrc = src;
-    if (paletteCache[src]) {
-      applyThemeColors(paletteCache[src].dom, paletteCache[src].acc, paletteCache[src].palette);
-    } else {
-      try { extractFlyerColors(src); } catch(e) {}
+    var isVid = /\.(mp4|webm|mov)$/i.test(src);
+    if (!isVid) {
+      if (paletteCache[src]) {
+        applyThemeColors(paletteCache[src].dom, paletteCache[src].acc, paletteCache[src].palette);
+      } else {
+        try { extractFlyerColors(src); } catch(e) {}
+      }
     }
     loadMessageForFlyer(idx);
     try { buildMirrorBg(); } catch(e) {}

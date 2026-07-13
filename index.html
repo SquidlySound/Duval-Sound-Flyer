@@ -2342,23 +2342,46 @@
   }
 
     function startFlyerGlitch(){
-    buildFlyerSections();
     flyerGlitchLoop();
     initSkyline();
     skyRunning = true;
     skylineCanvas.style.opacity = "1";
     skylineLoop();
+
+    // Fetch manifest then build gallery
+    fetch("flyers.json?v=" + Date.now())
+      .then(function(r) { return r.json(); })
+      .then(function(manifest) {
+        FLYERS = manifest.filter(function(f) {
+          return /\.(png|jpg|jpeg|gif|webp|mp4|webm|mov)$/i.test(f);
+        }).map(function(f) { return "flyers/" + f; });
+        if (!FLYERS.length) FLYERS = [DEFAULT_FLYER];
+        initGallery();
+      })
+      .catch(function() {
+        FLYERS = [DEFAULT_FLYER];
+        initGallery();
+      });
+  }
+
+  function initGallery() {
+    buildFlyerSections();
     setTimeout(function() {
       initScrollObserver();
       initGhostFlashes();
-      // Apply first flyer palette
-      applyFlyerSrc(FLYERS[0]);
-      loadMessageForFlyer(0);
-      // Pre-extract all flyer palettes in background
+      if (FLYERS.length > 0) {
+        var firstSrc = FLYERS[0];
+        if (!/\.(mp4|webm|mov)$/i.test(firstSrc)) {
+          applyFlyerSrc(firstSrc);
+        }
+        loadMessageForFlyer(0);
+      }
       FLYERS.forEach(function(src, i) {
-        if (i > 0) setTimeout(function() {
-          try { extractFlyerColors(src); } catch(e) {}
-        }, i * 800);
+        if (i > 0 && !/\.(mp4|webm|mov)$/i.test(src)) {
+          setTimeout(function() {
+            try { extractFlyerColors(src); } catch(e) {}
+          }, i * 800);
+        }
       });
     }, 300);
   }

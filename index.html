@@ -730,6 +730,21 @@
     91.6% { text-shadow: 0 0 10px var(--theme-glow,rgba(245,240,232,0.3)); transform: translate(0,0); }
   }
 
+
+  .ig-link {
+    display: block;
+    margin-top: 2rem;
+    font-size: 0.6rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: #555;
+    text-decoration: none;
+    text-align: center;
+    transition: color 0.2s, letter-spacing 0.2s;
+    font-family: 'Space Mono', 'Courier New', monospace;
+  }
+  .ig-link:hover { color: var(--white); letter-spacing: 0.28em; }
+
 </style>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
 </head>
@@ -758,6 +773,7 @@
     <button class="enter-btn" onclick="checkPassword()">ENTER</button>
     <div id="error-msg">&#9888;&nbsp; Invalid passcode</div>
     <div id="attempt-counter" class="attempt-counter"></div>
+    <a class="ig-link" href="https://www.instagram.com/duvalsound" target="_blank" rel="noopener noreferrer">need access dm here</a>
   </div>
 </div>
 

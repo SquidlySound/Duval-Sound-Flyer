@@ -12,11 +12,12 @@
 - 🔒 **Password-locked lock screen** with glitching DS logo background and VCR effects
 - 🎨 **Dynamic color theming** — extracts palette from each flyer and recolors the entire UI
 - 🏙️ **Jacksonville skyline** rendered as a PS2-style 3D wireframe mesh that orbits the city
-- 🖼️ **Multi-flyer support** — scroll vertically through multiple event flyers, each with its own palette and message
+- 🖼️ **Multi-media gallery** — vertical scroll through event flyers and videos, each with its own palette
 - 👻 **Ghost flash effects** — DS logo and squid mascot appear as rare glitch artifacts
-- 📊 **Stats tracking** — views, unlocks, fails, and unique visitors logged to Google Sheets
-- 💬 **Admin message board** — post console-style messages below each flyer
+- 📊 **Stats tracking** — views, unlocks, fails, and unique visitors logged to Google Sheets (Eastern TZ only)
+- 💬 **Per-admin message board** — each admin posts their own named console-style message per flyer
 - 🔐 **Server-side auth** — passwords never appear in source code
+- ⚙️ **Auto-updating gallery** — drop files into `/flyers/`, GitHub Action updates the manifest automatically
 
 ---
 
@@ -24,55 +25,62 @@
 
 ```
 ├── index.html                        # Main app — single self-contained file
-├── flyer1.png                        # Active event flyer(s)
-├── flyer2.png
+├── flyers.json                       # Auto-generated manifest of active media
+├── flyers/                           # Drop event flyers and videos here
+│   ├── 01_show.png
+│   ├── 02_promo.mp4
+│   └── ...
 ├── netlify.toml                      # Netlify build + header config
 ├── robots.txt                        # Blocks search engine indexing
 ├── package.json                      # googleapis dependency
+├── .github/
+│   └── workflows/
+│       └── update-flyers.yml         # Auto-updates flyers.json on push
 └── netlify/
     └── functions/
         ├── verify.js                 # Server-side password check
         ├── manage-passwords.js       # Add/remove passwords via Netlify API
         ├── log-event.js              # Logs events to Google Sheets (Eastern TZ only)
         ├── get-stats.js              # Reads aggregated stats from Google Sheets
-        ├── get-message.js            # Reads per-flyer admin message
-        └── set-message.js            # Saves per-flyer admin message
+        ├── get-message.js            # Reads per-admin messages per flyer
+        └── set-message.js            # Saves per-admin message per flyer
 ```
 
 ---
 
-## Managing Flyers
+## Managing Flyers & Videos
 
-Edit the `FLYERS` array near the top of `index.html`:
+**Just drop files into the `/flyers/` folder on GitHub.** The GitHub Action handles the rest.
 
-```js
-const FLYERS = [
-  "flyer1.png",
-  "flyer2.png",
-  "flyer3.png"
-];
+Supported formats: `.png` `.jpg` `.jpeg` `.gif` `.webp` `.mp4` `.webm` `.mov`
+
+**To control display order** — files are sorted alphabetically, so prefix with numbers:
+```
+01_may-show.png
+02_promo.mp4
+03_june-show.png
 ```
 
-- **Add a flyer** — upload `flyer4.png` to GitHub, add `"flyer4.png"` to the array
-- **Remove a flyer** — delete it from the array (and optionally from the repo)
-- **Reorder** — change the order in the array; guests scroll top to bottom
+**To remove a flyer** — delete the file from `/flyers/`. The Action updates `flyers.json` automatically on the next push.
 
-Flyers display in order. Each gets its own color palette, console message, and scroll section.
+**Videos** play automatically, looped, muted, full width. Color theming and ghost effects apply to images only.
+
+> `flyers.json` is auto-generated — do not edit it manually.
 
 ---
 
 ## Passwords
 
-All passwords are stored in **Netlify Environment Variables** — never in source code.
+All passwords live in **Netlify Environment Variables** — never in source code.
 
 | Variable | Description |
 |---|---|
 | `USER_PASSWORDS` | Comma-separated guest passwords e.g. `duvalsound,vippass` |
-| `ADMIN_PASSWORDS` | Comma-separated admin passwords e.g. `squidlysound,desty` |
+| `ADMIN_PASSWORDS` | Comma-separated admin passwords e.g. `squidlysound,desty,kryptid,bracci,oracle,lesbreehonest` |
 
 To update: **Netlify → Site → Environment Variables → edit → Trigger deploy**
 
-Passwords are case-insensitive. Multiple passwords of each type are supported.
+Passwords are case-insensitive. Multiple passwords per type are supported.
 
 ---
 
@@ -80,9 +88,25 @@ Passwords are case-insensitive. Multiple passwords of each type are supported.
 
 Enter any admin password on the lock screen to access:
 
-- **Live Stats** — views, unlocks, fails, unique visitors, 7-day chart, recent activity (pulled from Google Sheets)
-- **Guest Message** — per-flyer message displayed as animated console text below each flyer. Select flyer from dropdown, type message, save.
+- **Live Stats** — views, unlocks, fails, unique visitors, 7-day chart, recent activity (from Google Sheets)
+- **Guest Message** — per-flyer, per-admin message shown as animated console text below each flyer
+  - Select a flyer from the dropdown
+  - Type your message (supports multiple lines)
+  - Hit **Save** to post or **Clear** to remove your message
+  - Each admin sees and edits only their own message
+  - Guests see all active messages in a scrolling carousel with admin display names
 - **Exit Admin** — returns to lock screen
+
+### Admin Display Names
+
+| Password | Display Name |
+|---|---|
+| `squidlysound` | Squidly |
+| `desty` | Desty |
+| `lesbreehonest` | Lesbreehonest |
+| `kryptid` | Kryptid |
+| `bracci` | Bracci |
+| `oracle` | Oracle |
 
 ---
 
@@ -101,40 +125,50 @@ Set all of these in **Netlify → Site → Environment Variables**:
 
 ---
 
-## Google Sheets Setup
+## Google Sheets Structure
 
-The sheet tracks all visitor events and stores admin messages.
-
-**Sheet tabs:**
 | Tab | Contents |
 |---|---|
-| `Events` | One row per event: `type, timestamp, date, time ET, ip_hash, user_agent` |
-| `Message1` | Console message for flyer 1 (auto-created on first save) |
-| `Message2` | Console message for flyer 2 |
-| `MessageN` | ... |
+| `Events` | One row per event: `type, timestamp, date ET, time ET, ip_hash, user_agent` |
+| `Message1` | Admin messages for flyer 1 — columns: `admin, message` |
+| `Message2` | Admin messages for flyer 2 |
+| `MessageN` | Auto-created on first save for each flyer |
 
-**To set up:**
+**Events tab headers:** `type | timestamp | date | time | ip_hash | user_agent`
+
+**Timezone filtering:** Only Eastern Time visitors (UTC-4/UTC-5) are logged.
+
+### Google Sheets Setup
+
 1. Create a Google Sheet named `Duval Sound Stats`
-2. Add a tab called `Events` with headers: `type | timestamp | date | time | ip_hash | user_agent`
-3. Enable the **Google Sheets API** in Google Cloud Console
+2. Add a tab called `Events` with the headers above
+3. Enable **Google Sheets API** in Google Cloud Console
 4. Create a **Service Account** → download the JSON key
-5. Share the sheet with the service account's `client_email` as Editor
+5. Share the sheet with the service account `client_email` as Editor
 6. Add `GOOGLE_SHEET_ID` and `GOOGLE_SERVICE_ACCOUNT_JSON` to Netlify env vars
 
-**Timezone filtering:** Only visitors in Eastern Time (UTC-4 / UTC-5) are logged — filters out non-local traffic automatically.
+---
+
+## GitHub Action
+
+The `update-flyers.yml` action runs automatically whenever you push changes to the `/flyers/` folder. It:
+
+1. Scans `/flyers/` for supported media files
+2. Sorts them alphabetically
+3. Writes `flyers.json`
+4. Commits and pushes the updated manifest
+
+No manual `flyers.json` edits needed — ever.
 
 ---
 
 ## Deploying Changes
 
-1. Make edits locally or via GitHub web UI
-2. Push/commit to `main`
-3. Netlify auto-deploys within ~30 seconds
+Push to `main` → Netlify auto-deploys in ~30 seconds.
 
-**To update a flyer:**
-1. Rename your new image to `flyer1.png` (or whichever slot)
-2. Upload to GitHub replacing the old file
-3. Netlify redeploys — no HTML changes needed
+**To update media:** Drop files into `/flyers/` on GitHub → Action runs → Netlify deploys.  
+**To update passwords:** Edit env vars in Netlify → Trigger deploy.  
+**To update admin messages:** Log in with admin password → Guest Message section.
 
 ---
 
@@ -145,7 +179,8 @@ The sheet tracks all visitor events and stores admin messages.
 | Hosting | Netlify (static + functions) |
 | Auth | Netlify Functions (server-side) |
 | Database | Google Sheets via googleapis |
-| Analytics | Google Analytics (G-9XVF3WYZ61) |
+| Analytics | Google Analytics (`G-9XVF3WYZ61`) |
+| CI/CD | GitHub Actions (manifest auto-update) |
 | Frontend | Vanilla HTML / CSS / Canvas API |
 | Fonts | Bebas Neue, Space Mono, Orbitron (Google Fonts) |
 | Version control | GitHub (private repo) |
@@ -154,9 +189,9 @@ The sheet tracks all visitor events and stores admin messages.
 
 ## Analytics
 
-Google Analytics tracks all events automatically. Custom events:
+Custom GA4 events:
 - `flyer_view` — page load
-- `flyer_unlock` — correct password entered
+- `flyer_unlock` — correct password entered  
 - `flyer_fail` — wrong password attempt
 
 View in: **GA → Reports → Engagement → Events**

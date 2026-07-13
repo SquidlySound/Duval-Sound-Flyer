@@ -1,0 +1,48 @@
+name: Update flyers.json
+
+on:
+  push:
+    paths:
+      - 'flyers/**'   # Triggers whenever anything in /flyers/ changes
+
+jobs:
+  update-manifest:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Generate flyers.json
+        run: |
+          # List all supported media files in /flyers/ folder
+          # Sorted alphabetically — rename files to control order (01_show.png, 02_promo.mp4)
+          python3 -c "
+          import os, json
+
+          flyers_dir = 'flyers'
+          supported = {'.png', '.jpg', '.jpeg', '.gif', '.webp', '.mp4', '.webm', '.mov'}
+
+          if not os.path.isdir(flyers_dir):
+              files = []
+          else:
+              files = sorted([
+                  f for f in os.listdir(flyers_dir)
+                  if os.path.splitext(f)[1].lower() in supported
+              ])
+
+          with open('flyers.json', 'w') as out:
+              json.dump(files, out, indent=2)
+
+          print('Generated flyers.json with', len(files), 'file(s):', files)
+          "
+
+      - name: Commit flyers.json if changed
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add flyers.json
+          git diff --staged --quiet || git commit -m "Auto-update flyers.json"
+          git push

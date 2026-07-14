@@ -919,7 +919,7 @@
   // ── FLYER CONFIG — add/remove filenames to manage active events ──
   // FLYERS loaded dynamically from flyers.json — edit that file to manage media
   var FLYERS = [];
-  const DEFAULT_FLYER = "flyer1.png"; // admin preview fallback
+  const DEFAULT_FLYER = "flyers/flyer1.png"; // admin preview fallback
   // ───────────────────────────────────────────────────────────
 
   // Runtime flyer src (can be replaced by admin upload)
@@ -2468,16 +2468,21 @@
     skylineLoop();
 
     // Fetch manifest then build gallery
-    fetch("flyers.json?v=" + Date.now())
+    fetch("/flyers.json?v=" + Date.now())
       .then(function(r) { return r.json(); })
       .then(function(manifest) {
         FLYERS = manifest.filter(function(f) {
           return /\.(png|jpg|jpeg|gif|webp|mp4|webm|mov)$/i.test(f);
-        }).map(function(f) { return "flyers/" + f; });
+        }).map(function(f) {
+          // Don't double-prefix if already has flyers/
+          return f.startsWith("flyers/") ? f : "flyers/" + f;
+        });
         if (!FLYERS.length) FLYERS = [DEFAULT_FLYER];
+        console.log("Loaded flyers:", FLYERS);
         initGallery();
       })
-      .catch(function() {
+      .catch(function(err) {
+        console.warn("flyers.json fetch failed, using fallback:", err);
         FLYERS = [DEFAULT_FLYER];
         initGallery();
       });

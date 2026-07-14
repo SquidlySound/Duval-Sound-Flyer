@@ -695,7 +695,6 @@
     transition: color 1s;
   }
 
-
   /* ── FOLLOW THE SOUND TITLE ── */
   .follow-title {
     font-family: 'Orbitron', 'Courier New', monospace;
@@ -738,7 +737,6 @@
     91.3% { text-shadow: -5px 0 rgba(255,0,80,0.9), 5px 0 rgba(0,220,255,0.9); transform: translate(3px,0) skewX(2deg); }
     91.6% { text-shadow: 0 0 10px var(--theme-glow,rgba(245,240,232,0.3)); transform: translate(0,0); }
   }
-
 
   .ig-link {
     display: block;
@@ -923,7 +921,7 @@
   // ───────────────────────────────────────────────────────────
 
   // Runtime flyer src (can be replaced by admin upload)
-  let currentFlyerSrc = DEFAULT_FLYER;
+  var currentFlyerSrc = DEFAULT_FLYER;
 
   // ── STATS (localStorage for persistence across sessions) ──
   const STATS_KEY = "ds_stats";
@@ -1382,7 +1380,7 @@
       b: Math.min(255, Math.round(c.b + (255 - c.b) * amount))
     };
   }
-  applyFlyerSrc(DEFAULT_FLYER);
+  // passwords checked server-side
 
   // ── PASSWORD ─────────────────────────────────────────────
   let attempts = 0;
@@ -1681,7 +1679,7 @@
   const fbar2 = document.getElementById("fbar2");
   const flyerCard = document.querySelector(".flyer-container");
 
-  let flyerFrame = 0;
+  var flyerFrame = 0;
   function flyerGlitchLoop() {
     flyerFrame++;
     const w = flyerCanvas.width, h = flyerCanvas.height;
@@ -2109,13 +2107,8 @@
   }
 
     // ── GUEST MESSAGE SYSTEM ─────────────────────────────────────
-  var currentMessage = "";
 
   var messageCache = {};
-
-  function loadMessage() {
-    loadMessageForFlyer(0);
-  }
 
   function loadMessageForFlyer(idx) {
     var key = "message" + (idx + 1);
@@ -2232,7 +2225,6 @@
     });
   }
 
-  var carouselTimers = {};
   function startCarouselAuto(carousel, count) {
     var id = setInterval(function() {
       var current = carousel.querySelector(".console-slide.active");
@@ -2260,25 +2252,17 @@
     dots.forEach(function(d, di) { d.classList.toggle("active", di === nextIdx); });
   }
 
-  function renderConsoleMessage(text) { renderConsoleMessageForFlyer(text, activeFlyerIdx); }
-
-  function loadAdminMessage() {
-    // Populate flyer selector
+  function loadAdminMessageForFlyer() {
+    // Populate flyer selector if empty
     var sel = document.getElementById("msg-flyer-select");
-    if (sel) {
-      sel.innerHTML = "";
+    if (sel && sel.options.length === 0 && FLYERS.length > 0) {
       FLYERS.forEach(function(src, i) {
         var opt = document.createElement("option");
         opt.value = i + 1;
-        opt.textContent = "Flyer " + (i + 1) + " (" + src + ")";
+        opt.textContent = "Flyer " + (i+1) + " (" + src.replace("flyers/","") + ")";
         sel.appendChild(opt);
       });
     }
-    loadAdminMessageForFlyer();
-  }
-
-  function loadAdminMessageForFlyer() {
-    var sel = document.getElementById("msg-flyer-select");
     var flyerNum = sel ? parseInt(sel.value, 10) : 1;
     fetch("/.netlify/functions/get-message?flyer=" + flyerNum + "&admin=" + encodeURIComponent(currentAdminPassword))
       .then(function(r) { return r.json(); })
@@ -2385,8 +2369,7 @@
   var bgCurrentSrc = '';
   var bgAnimFrame = null;
   var bgT = 0;
-  var bgImg = new Image();
-  bgImg.crossOrigin = "anonymous";
+  var bgImg = null; // initialized lazily in setBgSrc
 
   function initBgCanvas() {
     bgCanvas = document.getElementById("flyer-bg-canvas");
@@ -2406,13 +2389,15 @@
   function setBgSrc(src) {
     if (!src || /\.(mp4|webm|mov)$/i.test(src)) return;
     bgCurrentSrc = src;
+    // Create bgImg lazily if not yet initialized
+    if (!bgImg) bgImg = new Image();
+    bgImg.crossOrigin = "anonymous";
     bgImg.onload = function() {
       if (!bgCanvas) initBgCanvas();
       startBgAnimation();
     };
     bgImg.onerror = function() {};
     bgImg.src = src;
-    // Also update the hidden img for ghost extraction
     var hiddenImg = document.getElementById("flyer-bg-img");
     if (hiddenImg) hiddenImg.src = src;
   }
@@ -2509,14 +2494,6 @@
         }
       });
     }, 300);
-  }
-
-  function initFlyerGhosts() {
-    // Set ghost images to same src as flyer
-    var src = document.getElementById("flyer-img").src;
-    var ghosts = document.querySelectorAll(".flyer-ghost img");
-    ghosts.forEach(function(g) { g.src = src; });
-    startGhostLoop();
   }
 
   function startGhostLoop() {

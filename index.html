@@ -157,9 +157,18 @@
     box-shadow: 0 0 60px var(--theme-glow), 0 0 120px var(--theme-glow);
     transition: box-shadow 1.2s;
   }
-  #flyer-bg { position:fixed; inset:0; z-index:0; display:flex; align-items:center; justify-content:center; overflow:hidden; }
-  #flyer-bg-img { width:100%; height:100%; object-fit:cover; filter:blur(28px) brightness(0.25) saturate(0.4) contrast(1.4); transform:scale(1.08); animation:bg-drift 12s ease-in-out infinite alternate; }
-  @keyframes bg-drift { 0%{ transform:scale(1.08) translate(0,0); } 33%{ transform:scale(1.1) translate(-1%,1%); } 66%{ transform:scale(1.09) translate(1%,-0.5%); } 100%{ transform:scale(1.08) translate(-0.5%,0.5%); } }
+  #flyer-bg {
+    position: fixed; inset: 0; z-index: 0;
+    overflow: hidden;
+  }
+  #flyer-bg-canvas {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    transition: opacity 1.2s;
+  }
+  #flyer-bg-img {
+    display: none; /* hidden — used only as image source for canvas */
+  }
   #flyer-mirror { position:fixed; inset:0; z-index:1; pointer-events:none; overflow:hidden; opacity:0.18; }
   .mirror-tile { position:absolute; filter:blur(2px) brightness(0.5) saturate(0.3); }
   #skyline-canvas { position:fixed; inset:0; width:100%; height:100%; pointer-events:none; z-index:2; opacity:0; transition:opacity 1.8s; }
@@ -780,7 +789,10 @@
 <!-- ── FLYER SCREEN ── -->
 <div id="flyer-screen">
   <!-- Fixed background layers -->
-  <div id="flyer-bg"><img id="flyer-bg-img" alt=""></div>
+  <div id="flyer-bg">
+    <canvas id="flyer-bg-canvas"></canvas>
+    <img id="flyer-bg-img" alt="" crossorigin="anonymous">
+  </div>
   <div id="flyer-mirror"></div>
   <canvas id="flyer-mesh" style="position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:1;opacity:0;transition:opacity 1.4s;mix-blend-mode:color-dodge;"></canvas>
   <canvas id="skyline-canvas"></canvas>
@@ -990,7 +1002,7 @@
     currentFlyerSrc = src;
     var isVideo = /\.(mp4|webm|mov)$/i.test(src);
     if (!isVideo) {
-      document.getElementById("flyer-bg-img").src = src;
+      setBgSrc(src);
       if (document.getElementById("admin-flyer-preview")) {
         document.getElementById("admin-flyer-preview").src = src;
       }
@@ -1091,7 +1103,7 @@
     document.querySelectorAll(".flyer-section").forEach(function(s, i) {
       s.classList.toggle("active", i === idx);
     });
-    document.getElementById("flyer-bg-img").src = src;
+    if (!/\.(mp4|webm|mov)$/i.test(src)) setBgSrc(src);
     currentFlyerSrc = src;
     var isVid = /\.(mp4|webm|mov)$/i.test(src);
     if (!isVid) {
@@ -1449,6 +1461,7 @@
   function returnToLock() {
     skyRunning = false;
     stopGhostFlashes();
+    stopBgAnimation();
     if (skylineCanvas) skylineCanvas.style.opacity = '0';
     const mesh = document.getElementById('flyer-mesh');
     if (mesh) mesh.style.opacity = '0';
@@ -2046,22 +2059,31 @@
       canvas.style.opacity   = "0.55";
     }, 80);
 
-    // Frame 4 (~110ms): gone
+    // Frame 4 (~130ms): settle into linger state
     setTimeout(function() {
-      canvas.style.opacity   = "0";
+      canvas.style.transform = "translate(" + ((Math.random()-0.5)*6) + "px," + ((Math.random()-0.5)*4) + "px)";
+      canvas.style.filter    = "brightness(1.2) saturate(0.4) contrast(1.1)";
+      canvas.style.opacity   = "0.35";
+      canvas.style.transition = "opacity 0.3s, transform 0.3s";
+    }, 130);
+
+    // Frame 5 (~450ms): fade out
+    setTimeout(function() {
+      canvas.style.opacity = "0";
       canvas.style.transform = "";
-      canvas.style.filter    = "saturate(0) brightness(1.5)";
       setTimeout(function() {
         canvas.style.display = "none";
+        canvas.style.transition = "";
+        canvas.style.filter = "saturate(0) brightness(1.5)";
         if (done) done();
-      }, 30);
-    }, 120);
+      }, 300);
+    }, 450);
   }
 
   // DS logo: every 8–18 seconds
   function scheduleGhostFlash_DS() {
     if (!ghostsRunning) return;
-    var delay = 8000 + Math.random() * 10000;
+    var delay = 3000 + Math.random() * 4000;
     setTimeout(function() {
       flashGhostElement(ghostDsCanvas, function() {
         scheduleGhostFlash_DS();
@@ -2072,7 +2094,7 @@
   // Squid: every 80–180 seconds (rare easter egg)
   function scheduleGhostFlash_Squid() {
     if (!ghostsRunning) return;
-    var delay = 80000 + Math.random() * 100000;
+    var delay = 25000 + Math.random() * 25000;
     setTimeout(function() {
       flashGhostElement(ghostSquidCanvas, function() {
         scheduleGhostFlash_Squid();
@@ -2357,6 +2379,87 @@
     if (ta && ct) ct.textContent = ta.value.length;
   }
 
+    // ── BACKGROUND CANVAS ENGINE ─────────────────────────────────
+  // Renders the current flyer blurred + tinted, auto-fitted to screen
+  var bgCanvas = null, bgCtx = null;
+  var bgCurrentSrc = '';
+  var bgAnimFrame = null;
+  var bgT = 0;
+  var bgImg = new Image();
+  bgImg.crossOrigin = "anonymous";
+
+  function initBgCanvas() {
+    bgCanvas = document.getElementById("flyer-bg-canvas");
+    if (!bgCanvas) return;
+    bgCtx = bgCanvas.getContext("2d");
+    resizeBgCanvas();
+    window.addEventListener("resize", resizeBgCanvas);
+  }
+
+  function resizeBgCanvas() {
+    if (!bgCanvas) return;
+    bgCanvas.width  = window.innerWidth;
+    bgCanvas.height = window.innerHeight;
+    if (bgCurrentSrc) drawBgFrame();
+  }
+
+  function setBgSrc(src) {
+    if (!src || /\.(mp4|webm|mov)$/i.test(src)) return;
+    bgCurrentSrc = src;
+    bgImg.onload = function() {
+      if (!bgCanvas) initBgCanvas();
+      startBgAnimation();
+    };
+    bgImg.onerror = function() {};
+    bgImg.src = src;
+    // Also update the hidden img for ghost extraction
+    var hiddenImg = document.getElementById("flyer-bg-img");
+    if (hiddenImg) hiddenImg.src = src;
+  }
+
+  function drawBgFrame() {
+    if (!bgCtx || !bgCanvas || !bgImg.complete || !bgImg.naturalWidth) return;
+    var W = bgCanvas.width, H = bgCanvas.height;
+    var iW = bgImg.naturalWidth, iH = bgImg.naturalHeight;
+
+    // Auto-fit: calculate scale to COVER the screen
+    // then we'll blur it heavily so overflow doesn't matter
+    var scaleX = W / iW, scaleY = H / iH;
+    var scale  = Math.max(scaleX, scaleY) * 1.06; // slight overscan for blur edges
+    var dW = iW * scale, dH = iH * scale;
+    var dx = (W - dW) / 2, dy = (H - dH) / 2;
+
+    // Subtle drift animation
+    bgT += 0.003;
+    var ox = Math.sin(bgT * 0.7) * W * 0.012;
+    var oy = Math.cos(bgT * 0.5) * H * 0.010;
+    var scaleAnim = 1 + Math.sin(bgT * 0.3) * 0.008;
+
+    bgCtx.clearRect(0, 0, W, H);
+
+    // Draw blurred background using CSS filter on a temp canvas
+    bgCtx.save();
+    bgCtx.filter = "blur(32px) brightness(0.28) saturate(2.2) contrast(1.35)";
+    bgCtx.translate(W/2 + ox, H/2 + oy);
+    bgCtx.scale(scaleAnim, scaleAnim);
+    bgCtx.drawImage(bgImg, -dW/2, -dH/2, dW, dH);
+    bgCtx.restore();
+  }
+
+  var bgRafId = null;
+  function startBgAnimation() {
+    if (bgRafId) cancelAnimationFrame(bgRafId);
+    function loop() {
+      drawBgFrame();
+      bgRafId = requestAnimationFrame(loop);
+    }
+    loop();
+  }
+
+  function stopBgAnimation() {
+    if (bgRafId) { cancelAnimationFrame(bgRafId); bgRafId = null; }
+  }
+
     function startFlyerGlitch(){
     flyerGlitchLoop();
     initSkyline();
@@ -2381,6 +2484,7 @@
   }
 
   function initGallery() {
+    initBgCanvas();
     buildFlyerSections();
     setTimeout(function() {
       initScrollObserver();

@@ -3,7 +3,7 @@ name: Update flyers.json
 on:
   push:
     paths:
-      - 'flyers/**'   # Triggers whenever anything in /flyers/ changes
+      - 'flyers/**'
 
 jobs:
   update-manifest:
@@ -14,13 +14,13 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # full history needed for git log dates
 
-      - name: Generate flyers.json
+      - name: Generate flyers.json sorted by upload date (newest first)
         run: |
-          # List all supported media files in /flyers/ folder
-          # Sorted alphabetically — rename files to control order (01_show.png, 02_promo.mp4)
           python3 -c "
-          import os, json
+          import os, json, subprocess
 
           flyers_dir = 'flyers'
           supported = {'.png', '.jpg', '.jpeg', '.gif', '.webp', '.mp4', '.webm', '.mov'}
@@ -28,15 +28,31 @@ jobs:
           if not os.path.isdir(flyers_dir):
               files = []
           else:
-              files = sorted([
-                  f for f in os.listdir(flyers_dir)
-                  if os.path.splitext(f)[1].lower() in supported
-              ])
+              files_with_dates = []
+              for f in os.listdir(flyers_dir):
+                  if os.path.splitext(f)[1].lower() not in supported:
+                      continue
+                  filepath = os.path.join(flyers_dir, f)
+                  # Get the date this file was first committed to git
+                  result = subprocess.run(
+                      ['git', 'log', '--follow', '--format=%aI', '--', filepath],
+                      capture_output=True, text=True
+                  )
+                  dates = result.stdout.strip().split('\n')
+                  # Last line = first commit date (oldest), first line = most recent commit
+                  first_committed = dates[-1] if dates and dates[-1] else '1970-01-01T00:00:00+00:00'
+                  files_with_dates.append((f, first_committed))
+
+              # Sort by first commit date — newest upload first
+              files_with_dates.sort(key=lambda x: x[1], reverse=True)
+              files = [f for f, _ in files_with_dates]
 
           with open('flyers.json', 'w') as out:
               json.dump(files, out, indent=2)
 
-          print('Generated flyers.json with', len(files), 'file(s):', files)
+          print('Generated flyers.json (' + str(len(files)) + ' files, newest first):')
+          for f in files:
+              print('  ' + f)
           "
 
       - name: Commit flyers.json if changed
@@ -44,5 +60,5 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add flyers.json
-          git diff --staged --quiet || git commit -m "Auto-update flyers.json"
+          git diff --staged --quiet || git commit -m "Auto-update flyers.json (sorted by upload date)"
           git push

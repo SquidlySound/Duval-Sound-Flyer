@@ -1424,6 +1424,26 @@
           document.getElementById("admin-screen").style.display = "flex";
           
           renderAdminStats();
+          // Fetch flyers.json to populate the message dropdown
+          if (FLYERS.length === 0) {
+            fetch("/flyers.json?v=" + Date.now())
+              .then(function(r) { return r.json(); })
+              .then(function(manifest) {
+                FLYERS = manifest.filter(function(f) {
+                  return /\.(png|jpg|jpeg|gif|webp|mp4|webm|mov)$/i.test(f);
+                }).map(function(f) {
+                  return f.startsWith("flyers/") ? f : "flyers/" + f;
+                });
+                if (!FLYERS.length) FLYERS = [DEFAULT_FLYER];
+                loadAdminMessageForFlyer();
+              })
+              .catch(function() {
+                FLYERS = [DEFAULT_FLYER];
+                loadAdminMessageForFlyer();
+              });
+          } else {
+            loadAdminMessageForFlyer();
+          }
         }, 400);
 
       } else if (data.role === "user") {

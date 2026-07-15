@@ -852,6 +852,11 @@
         <div class="stat-label">Unique Unlocks</div>
         <div class="stat-delta">&nbsp;</div>
       </div>
+      <div class="stat-cell">
+        <div class="stat-value" id="stat-admin-unlocks">0</div>
+        <div class="stat-label">Admin Unlocks</div>
+        <div class="stat-delta">&nbsp;</div>
+      </div>
     </div>
     <div class="chart-wrap">
       <div class="chart-bars" id="chart-bars"></div>
@@ -970,6 +975,7 @@
       if (typeof gtag === "function") {
         if (type === "view")   gtag("event", "flyer_view",   { event_category: "engagement" });
         if (type === "unlock") gtag("event", "flyer_unlock", { event_category: "engagement" });
+        if (type === "admin_unlock") gtag("event", "admin_unlock", { event_category: "engagement" });
         if (type === "fail")   gtag("event", "flyer_fail",   { event_category: "engagement" });
       }
     } catch(e) {}
@@ -1417,7 +1423,7 @@
         currentAdminPassword = raw; // store for message tagging
         if (data.userPasswords)  USER_PASSWORDS  = data.userPasswords;
         if (data.adminPasswords) ADMIN_PASSWORDS = data.adminPasswords;
-        recordEvent("unlock");
+        recordEvent("admin_unlock");
         document.getElementById("lock-screen").classList.add("fade-out");
         setTimeout(function() {
           document.getElementById("lock-screen").style.display = "none";

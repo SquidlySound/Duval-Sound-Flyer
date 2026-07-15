@@ -1509,7 +1509,30 @@
   }
 
   // ── ADMIN STATS RENDER ────────────────────────────────────
-  function renderAdminStats() {
+  function updateAdminPreview(src) {
+    var el = document.getElementById("admin-flyer-preview");
+    if (!el) return;
+    // If specific src provided use it, otherwise use first non-video
+    if (!src) {
+      for (var i = 0; i < FLYERS.length; i++) {
+        if (!/\.(mp4|webm|mov)$/i.test(FLYERS[i])) { src = FLYERS[i]; break; }
+      }
+    }
+    if (!src) return;
+    var isVideo = /\.(mp4|webm|mov)$/i.test(src);
+    if (isVideo) {
+      // Show a video placeholder label instead
+      el.removeAttribute("src");
+      el.alt = "Video: " + src.replace("flyers/","");
+      el.style.cssText = "width:100%;display:flex;align-items:center;justify-content:center;min-height:80px;background:#111;color:#555;font-family:monospace;font-size:0.7rem;letter-spacing:0.1em;";
+    } else {
+      el.src = src;
+      el.alt = "Current Flyer";
+      el.style.cssText = "";
+    }
+  }
+
+    function renderAdminStats() {
     setStatsStatus("loading");
 
     fetch("/.netlify/functions/get-stats")
@@ -2279,11 +2302,14 @@
       FLYERS.forEach(function(src, i) {
         var opt = document.createElement("option");
         opt.value = i + 1;
-        opt.textContent = "Flyer " + (i+1) + " (" + src.replace("flyers/","") + ")";
+        opt.textContent = src.replace("flyers/","");
         sel.appendChild(opt);
       });
     }
+    // Update preview to match selected flyer
     var flyerNum = sel ? parseInt(sel.value, 10) : 1;
+    var selectedSrc = FLYERS[flyerNum - 1] || FLYERS[0];
+    if (selectedSrc) updateAdminPreview(selectedSrc);
     fetch("/.netlify/functions/get-message?flyer=" + flyerNum + "&admin=" + encodeURIComponent(currentAdminPassword))
       .then(function(r) { return r.json(); })
       .then(function(data) {
@@ -2494,6 +2520,30 @@
   }
 
   function initGallery() {
+    // Fetch config for flyer order + admin names, then build
+    fetch("/.netlify/functions/get-config")
+      .then(function(r) { return r.json(); })
+      .then(function(cfg) {
+        if (cfg && cfg.flyerOrder && cfg.flyerOrder.length > 0) {
+          var ordered = [];
+          cfg.flyerOrder.forEach(function(name) {
+            var match = FLYERS.find(function(f) {
+              return f === name || f === "flyers/" + name || f.endsWith("/" + name);
+            });
+            if (match) ordered.push(match);
+          });
+          // Append any files not listed in config
+          FLYERS.forEach(function(f) {
+            if (ordered.indexOf(f) === -1) ordered.push(f);
+          });
+          FLYERS = ordered;
+        }
+        runGallery();
+      })
+      .catch(function() { runGallery(); });
+  }
+
+  function runGallery() {
     initBgCanvas();
     buildFlyerSections();
     setTimeout(function() {

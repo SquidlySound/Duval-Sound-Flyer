@@ -1,5 +1,6 @@
 // netlify/functions/get-stats.js
 // Reads all rows from Google Sheets and returns aggregated stats
+// admin_unlock events are counted separately and excluded from main totals
 
 const { google } = require("googleapis");
 
@@ -20,20 +21,17 @@ exports.handler = async function(event) {
     });
 
     const rows = response.data.values || [];
-    // Skip header row if present
     const dataRows = rows.filter(r => r[0] && r[0] !== "type");
 
-    // Aggregate totals
-    let views = 0, unlocks = 0, fails = 0;
+    let views = 0, unlocks = 0, fails = 0, adminUnlocks = 0;
     let todayViews = 0, todayUnlocks = 0;
     const today = new Date().toISOString().slice(0, 10);
     const weekChart = {};
     const recentEvents = [];
 
-    // Unique visitor tracking via IP hash
-    const uniqueVisitors  = new Set(); // all unique IPs that viewed
-    const uniqueUnlockers = new Set(); // unique IPs that unlocked
-    const todayVisitors   = new Set(); // unique IPs today
+    const uniqueVisitors  = new Set();
+    const uniqueUnlockers = new Set();
+    const todayVisitors   = new Set();
 
     dataRows.forEach(function(row) {
       const type      = row[0] || "";
@@ -41,8 +39,14 @@ exports.handler = async function(event) {
       const date      = row[2] || "";
       const time      = row[3] || "";
       const ipHash    = row[4] || "";
-      const ua        = row[5] || "";
       const rowDay    = timestamp.slice(0, 10);
+
+      // Admin unlocks — tracked separately, excluded from main stats
+      if (type === "admin_unlock") {
+        adminUnlocks++;
+        // Don't add to recent events or charts
+        return;
+      }
 
       if (type === "view") {
         views++;
@@ -56,29 +60,28 @@ exports.handler = async function(event) {
       }
       if (type === "fail") { fails++; }
 
-      // Week chart — last 7 days views
+      // Week chart — last 7 days views only
       const daysDiff = Math.floor((Date.now() - new Date(rowDay).getTime()) / 86400000);
       if (daysDiff >= 0 && daysDiff < 7 && type === "view") {
         weekChart[rowDay] = (weekChart[rowDay] || 0) + 1;
       }
 
-      // Recent events (last 15)
+      // Recent events (last 15, excluding admin unlocks)
       if (recentEvents.length < 15) {
-        recentEvents.push({ type, date, time, ip: ipHash ? ipHash.slice(0,6) : "—" });
+        recentEvents.push({ type, date, time, ip: ipHash ? ipHash.slice(0, 6) : "—" });
       }
     });
 
-    // Reverse so most recent is first
     recentEvents.reverse();
 
     return {
       statusCode: 200,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        views, unlocks, fails,
+        views, unlocks, fails, adminUnlocks,
         todayViews, todayUnlocks,
-        uniqueVisitors:  uniqueVisitors.size,
-        uniqueUnlockers: uniqueUnlockers.size,
+        uniqueVisitors:      uniqueVisitors.size,
+        uniqueUnlockers:     uniqueUnlockers.size,
         todayUniqueVisitors: todayVisitors.size,
         weekChart,
         recentEvents,

@@ -1,13 +1,11 @@
 // netlify/functions/get-config.js
-// Reads the Config tab from Google Sheets for flyer display order.
-// Auto-creates the tab if it doesn't exist, populated from flyers.json.
-//
-// Config tab format (A=key, B=value):
-//   flyer_order | direct support.png,flyer1.mp4
+// Syncs the Config tab's flyer_order with flyers.json:
+//  - New files are appended (flyers.json is already sorted by upload date, newest first)
+//  - Deleted files are removed from the order
+//  - Your manual reordering of existing files is PRESERVED
+// Returns: { flyerOrder: [...] }
 
 const { google } = require("googleapis");
-const fs   = require("fs");
-const path = require("path");
 
 async function getSheets() {
   const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
@@ -18,43 +16,18 @@ async function getSheets() {
   return google.sheets({ version: "v4", auth });
 }
 
-async function createConfigTab(sheets, spreadsheetId) {
-  // Read flyers.json for current flyer order
-  let flyerOrder = [];
+async function fetchManifest() {
+  // Fetch the live flyers.json from the deployed site
+  const siteUrl = process.env.URL || "https://dsflyerdrop.netlify.app";
   try {
-    const flyersPath = path.join(process.cwd(), "flyers.json");
-    if (fs.existsSync(flyersPath)) {
-      flyerOrder = JSON.parse(fs.readFileSync(flyersPath, "utf8"));
-    }
+    const res = await fetch(siteUrl + "/flyers.json?v=" + Date.now());
+    if (!res.ok) return [];
+    const manifest = await res.json();
+    return Array.isArray(manifest) ? manifest : [];
   } catch (e) {
-    console.warn("Could not read flyers.json:", e.message);
+    console.warn("Could not fetch flyers.json:", e.message);
+    return [];
   }
-
-  const rows = [
-    ["key", "value"],
-    ["flyer_order", flyerOrder.join(",")],
-  ];
-
-  try {
-    await sheets.spreadsheets.batchUpdate({
-      spreadsheetId,
-      requestBody: {
-        requests: [{ addSheet: { properties: { title: "Config" } } }],
-      },
-    });
-  } catch (e) {
-    if (!e.message.includes("already exists")) throw e;
-  }
-
-  await sheets.spreadsheets.values.update({
-    spreadsheetId,
-    range: "Config!A1",
-    valueInputOption: "RAW",
-    requestBody: { values: rows },
-  });
-
-  console.log("Config tab created with flyer_order:", flyerOrder.join(","));
-  return rows.slice(1);
 }
 
 exports.handler = async function(event) {
@@ -62,45 +35,73 @@ exports.handler = async function(event) {
     const sheets = await getSheets();
     const spreadsheetId = process.env.GOOGLE_SHEET_ID;
 
-    let rows = [];
-    let needsCreate = false;
+    // 1. Get current manifest (sorted by upload date, newest first)
+    const manifest = await fetchManifest();
 
+    // 2. Read existing Config tab
+    let sheetOrder = [];
+    let tabExists = true;
     try {
       const response = await sheets.spreadsheets.values.get({
         spreadsheetId,
         range: "Config!A:B",
       });
-      const allRows = response.data.values || [];
-      rows = allRows.filter(r => r[0] && r[0] !== "key");
+      const rows = (response.data.values || []).filter(r => r[0] && r[0] !== "key");
+      const orderRow = rows.find(r => r[0].trim().toLowerCase() === "flyer_order");
+      if (orderRow && orderRow[1]) {
+        sheetOrder = orderRow[1].split(",").map(f => f.trim()).filter(Boolean);
+      }
     } catch (e) {
       if (e.message && e.message.includes("Unable to parse range")) {
-        needsCreate = true;
+        tabExists = false;
       } else {
         throw e;
       }
     }
 
-    if (needsCreate || rows.length === 0) {
-      rows = await createConfigTab(sheets, spreadsheetId);
-    }
+    // 3. Sync: keep user's order for existing files, remove deleted, add new
+    const manifestSet = new Set(manifest);
+    // Keep only files that still exist, in the user's order
+    const kept = sheetOrder.filter(f => manifestSet.has(f));
+    // Find new files not yet in the sheet order (manifest order = upload date)
+    const keptSet = new Set(kept);
+    const added = manifest.filter(f => !keptSet.has(f));
+    // New files go on top (newest first), then user-ordered existing files
+    const finalOrder = [...added, ...kept];
 
-    const config = { flyerOrder: [] };
-    rows.forEach(function(row) {
-      if (!row[0]) return;
-      const key   = row[0].trim().toLowerCase();
-      const value = (row[1] || "").trim();
-      if (key === "flyer_order" && value) {
-        config.flyerOrder = value.split(",").map(f => f.trim()).filter(Boolean);
+    // 4. Write back to sheet if changed or tab missing
+    const orderChanged = finalOrder.join(",") !== sheetOrder.join(",");
+    if (!tabExists) {
+      try {
+        await sheets.spreadsheets.batchUpdate({
+          spreadsheetId,
+          requestBody: {
+            requests: [{ addSheet: { properties: { title: "Config" } } }],
+          },
+        });
+      } catch (e) {
+        if (!e.message.includes("already exists")) throw e;
       }
-    });
+    }
+    if (!tabExists || orderChanged) {
+      await sheets.spreadsheets.values.update({
+        spreadsheetId,
+        range: "Config!A1:B2",
+        valueInputOption: "RAW",
+        requestBody: {
+          values: [
+            ["key", "value"],
+            ["flyer_order", finalOrder.join(",")],
+          ],
+        },
+      });
+      console.log("Config synced. flyer_order:", finalOrder.join(","));
+    }
 
     return {
       statusCode: 200,
-      headers: {
-        "Content-Type": "application/json",
-        "Cache-Control": "max-age=60",
-      },
-      body: JSON.stringify(config),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ flyerOrder: finalOrder }),
     };
   } catch (e) {
     console.error("get-config error:", e.message);

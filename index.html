@@ -2636,7 +2636,7 @@
   // DS logo: every 8–18 seconds
   function scheduleGhostFlash_DS() {
     if (!ghostsRunning) return;
-    var delay = 3000 + Math.random() * 4000;
+    var delay = 800 + Math.random() * 1200;
     setTimeout(function() {
       flashGhostElement(ghostDsCanvas, function() {
         scheduleGhostFlash_DS();
@@ -3023,6 +3023,30 @@
     // Reset scroll position — #flyer-screen is the scrollable container
     var scrollContainer = document.getElementById("flyer-screen");
     if (scrollContainer) scrollContainer.scrollTop = 0;
+
+    // Show/hide the flyer background layers — only visible on the Flyers tab
+    var showBg = (tabName === "flyers");
+    var bgLayers = [
+      document.getElementById("flyer-bg"),
+      document.getElementById("flyer-mirror"),
+      document.getElementById("flyer-mesh"),
+      document.getElementById("skyline-canvas"),
+      document.getElementById("flyer-vcr")
+    ];
+    bgLayers.forEach(function(el) {
+      if (el) el.style.opacity = showBg ? "" : "0";
+    });
+    if (!showBg) {
+      skyRunning = false;
+      stopBgAnimation();
+    } else {
+      skyRunning = true;
+      if (skylineCanvas) skylineCanvas.style.opacity = "1";
+      skylineLoop();
+      if (currentFlyerSrc && !/\.(mp4|webm|mov)$/i.test(currentFlyerSrc)) {
+        startBgAnimation();
+      }
+    }
 
     if (tabName === "archive" && !archiveLoaded) {
       loadArchiveGrid();

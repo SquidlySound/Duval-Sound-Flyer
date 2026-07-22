@@ -219,18 +219,6 @@
   .back-btn:hover { color:var(--white); letter-spacing:0.28em; }
   @keyframes fade-up { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
   /* Flyer ghost clones — desaturated copies that glitch behind the main poster */
-  .flyer-ghost-wrap {
-    position: relative;
-    width: 100%; max-width: min(520px, 90vw);
-    z-index: 10;
-  }
-  .flyer-ghost {
-    position: absolute; inset: 0;
-    width: 100%;
-    pointer-events: none;
-    opacity: 0;
-  }
-  .flyer-ghost img { width: 100%; display: block; }
     71%  { opacity:0.55; transform:translate(-12px, 3px) skewX(-2deg); }
     72%  { opacity:0.3;  transform:translate(8px, -2px) skewX(1deg); }
     73%  { opacity:0.45; transform:translate(-5px, 1px); }
@@ -287,11 +275,7 @@
     75%  { transform: translateY(-8px)  scale(1.008) rotate(0.12deg)   rotateX(0.4deg); }
     100% { transform: translateY(0px)   scale(1.000) rotate(0deg)      rotateX(0deg); }
   }
-  /* VCR distortion on the actual poster image */
-  #flyer-img {
-    width: 100%; display: block;
-    animation: vcr-distort 5s 2s infinite;
-  }
+  /* VCR distortion keyframes — applied inline via JS to dynamically created flyer images */
   @keyframes vcr-distort {
     0%,74%,100%  { filter:none; transform:translateX(0); }
     /* Glitch burst 1 */
@@ -310,8 +294,6 @@
     95%  { filter:hue-rotate(8deg) saturate(1.3); }
     96%  { filter:none; }
   }
-
-  #flyer-img { width:100%; display:block; animation:vcr-distort 6s 2s infinite; }
 
   /* ══════════════════════════════════════
      ADMIN SCREEN
@@ -411,19 +393,6 @@
 
   /* ── CONSOLE MESSAGE ── */
   #console-wrap,
-  .console-wrap-section {
-    position: relative;
-    z-index: 11;
-    width: 100%; max-width: min(420px, 88vw);
-    margin: 1.5rem auto 0;
-    padding: 1.2rem 1.4rem;
-    border: 1px solid var(--console-border, rgba(245,240,232,0.25));
-    background: var(--console-bg, rgba(0,0,0,0.82));
-    backdrop-filter: blur(8px);
-    box-shadow: 0 0 24px var(--console-glow, rgba(245,240,232,0.08));
-    display: none;
-    transition: border-color 1.2s, box-shadow 1.2s;
-  }
   #console-wrap::before {
     content: "// MESSAGE";
     display: block;
@@ -630,47 +599,6 @@
   }
 
   /* Follow the Sound title */
-  .follow-title {
-    font-family: 'Orbitron', 'Courier New', monospace;
-    font-size: clamp(1rem, 4.5vw, 2rem);
-    font-weight: 900;
-    letter-spacing: 0.15em;
-    text-transform: uppercase;
-    color: var(--theme-primary, #f5f0e8);
-    margin: 0.3rem 0;
-    text-align: center;
-    line-height: 1;
-    position: relative;
-    text-shadow:
-      0 0 10px var(--theme-glow, rgba(245,240,232,0.3)),
-      0 0 30px var(--theme-glow, rgba(245,240,232,0.15));
-    animation:
-      title-flicker 8s infinite,
-      title-rgb 8s infinite;
-    transition: color 1.2s, text-shadow 1.2s;
-  }
-  @keyframes title-flicker {
-    0%,72%,100% { opacity:1; }
-    73%  { opacity:0.85; }
-    73.5%{ opacity:1; }
-    74%  { opacity:0.6; }
-    74.3%{ opacity:1; }
-    82%  { opacity:0.9; }
-    82.2%{ opacity:1; }
-    90%  { opacity:0.7; }
-    90.1%{ opacity:1; }
-  }
-  @keyframes title-rgb {
-    0%,70%,100% { text-shadow: 0 0 10px var(--theme-glow,rgba(245,240,232,0.3)), 0 0 30px var(--theme-glow,rgba(245,240,232,0.1)); transform: translate(0,0); }
-    71%  { text-shadow: -4px 0 rgba(255,0,80,0.8), 4px 0 rgba(0,220,255,0.8); transform: translate(-2px, 0) skewX(-1deg); }
-    71.5%{ text-shadow: 4px 0 rgba(255,0,80,0.8), -4px 0 rgba(0,220,255,0.8); transform: translate(2px, 0) skewX(1deg); }
-    72%  { text-shadow: 0 0 10px var(--theme-glow,rgba(245,240,232,0.3)); transform: translate(0,0); }
-    83%  { text-shadow: -3px 0 rgba(255,0,80,0.6), 3px 0 rgba(0,220,255,0.6); transform: translate(-1px,0); }
-    83.3%{ text-shadow: 0 0 10px var(--theme-glow,rgba(245,240,232,0.3)); transform: translate(0,0); }
-    91%  { text-shadow: 5px 0 rgba(255,0,80,0.9), -5px 0 rgba(0,220,255,0.9); transform: translate(-3px,0) skewX(-2deg); }
-    91.3%{ text-shadow: -5px 0 rgba(255,0,80,0.9), 5px 0 rgba(0,220,255,0.9); transform: translate(3px,0) skewX(2deg); }
-    91.6%{ text-shadow: 0 0 10px var(--theme-glow,rgba(245,240,232,0.3)); transform: translate(0,0); }
-  }
 
   /* Scroll indicator between flyers */
   .scroll-hint {
@@ -745,17 +673,17 @@
   .ig-link {
     display: block;
     margin-top: 2rem;
-    font-size: 0.6rem;
+    font-size: 0.75rem;
+    font-weight: 700;
     letter-spacing: 0.2em;
     text-transform: uppercase;
-    color: #555;
+    color: #777;
     text-decoration: none;
     text-align: center;
     transition: color 0.2s, letter-spacing 0.2s;
     font-family: 'Space Mono', 'Courier New', monospace;
   }
   .ig-link:hover { color: var(--white); letter-spacing: 0.28em; }
-
 
   /* ── TAB NAVIGATION ── */
   #main-tabbar {
@@ -974,24 +902,11 @@
     letter-spacing: 0.1em;
     color: var(--white);
   }
-  .member-role {
-    font-size: 0.6rem;
-    letter-spacing: 0.15em;
-    color: #666;
-    text-transform: uppercase;
-    margin-top: 0.2rem;
-  }
   .member-socials {
     display: flex;
     gap: 0.5rem;
     margin-top: 0.5rem;
   }
-  .member-social-placeholder {
-    width: 20px; height: 20px;
-    border: 1px solid #333;
-    border-radius: 50%;
-  }
-
 
   /* ── ADMIN PROFILE EDITOR ── */
   .profile-photo-row {
@@ -1027,7 +942,6 @@
     transition: border-color 0.2s;
   }
   .btn-secondary:hover { border-color: var(--white); }
-
 
   .member-bio {
     font-size: 0.65rem;
@@ -1600,6 +1514,7 @@
   function applyThemeColors(dom, acc, palette) {
     const fs = document.getElementById("flyer-screen");
     if (!palette) palette = [dom, acc];
+    try { setBgPalette(palette); } catch(e) {}
 
     const accStr = acc.r + "," + acc.g + "," + acc.b;
     const lDom = lighten(dom, 0.6);
@@ -2586,11 +2501,6 @@
     canvas.style.display = "block";
     randomGhostPosition(canvas);
 
-    // Build accent color filter
-    var accentR = Math.min(255, ghostAccentR + 60);
-    var accentG = Math.min(255, ghostAccentG + 60);
-    var accentB = Math.min(255, ghostAccentB + 60);
-
     // Frame sequence — VCR ghost signal
     // Frame 1: slam in, skewed, accent-tinted
     canvas.style.opacity   = "0.85";
@@ -2921,13 +2831,22 @@
     if (ta && ct) ct.textContent = ta.value.length;
   }
 
-    // ── BACKGROUND CANVAS ENGINE ─────────────────────────────────
-  // Renders the current flyer blurred + tinted, auto-fitted to screen
+    // ── ABSTRACT PALETTE BACKGROUND ENGINE ────────────────────────
+  // Flowing gradient blobs colored from the current flyer's palette,
+  // crossfading smoothly between flyers as you scroll. Glitch bursts
+  // (RGB slice, scanline sweep, static noise) layer on top periodically.
   var bgCanvas = null, bgCtx = null;
-  var bgCurrentSrc = '';
-  var bgAnimFrame = null;
   var bgT = 0;
-  var bgImg = null; // initialized lazily in setBgSrc
+  var bgRafId = null;
+
+  // Two palette states for crossfading between flyers
+  var bgPaletteFrom = null;
+  var bgPaletteTo   = null;
+  var bgBlendProgress = 1; // 1 = fully on "to" palette
+  var bgBlendSpeed = 0.012;
+
+  // Blob definitions — regenerated per palette, drift independently
+  var bgBlobs = [];
 
   function initBgCanvas() {
     bgCanvas = document.getElementById("flyer-bg-canvas");
@@ -2941,57 +2860,166 @@
     if (!bgCanvas) return;
     bgCanvas.width  = window.innerWidth;
     bgCanvas.height = window.innerHeight;
-    if (bgCurrentSrc) drawBgFrame();
   }
 
+  function makeBlobsFromPalette(palette) {
+    var colors = palette && palette.length ? palette : [{r:120,g:120,b:140}];
+    var blobs = [];
+    var count = 5 + Math.floor(Math.random() * 2); // 5-6 blobs
+    for (var i = 0; i < count; i++) {
+      var c = colors[i % colors.length];
+      blobs.push({
+        color: c,
+        x: Math.random(),
+        y: Math.random(),
+        baseR: 0.28 + Math.random() * 0.22, // relative to min(W,H)
+        speedX: (Math.random() - 0.5) * 0.00035,
+        speedY: (Math.random() - 0.5) * 0.00035,
+        phase: Math.random() * Math.PI * 2,
+        pulseSpeed: 0.3 + Math.random() * 0.4
+      });
+    }
+    return blobs;
+  }
+
+  // Called when scrolling to a new flyer — begins crossfade to its palette
+  function setBgPalette(palette) {
+    if (!palette || !palette.length) return;
+    bgPaletteFrom = bgBlobs.length ? bgBlobs : makeBlobsFromPalette(palette);
+    bgPaletteTo   = makeBlobsFromPalette(palette);
+    bgBlendProgress = 0;
+    if (!bgCanvas) initBgCanvas();
+    startBgAnimation();
+  }
+
+  // Legacy entry point kept for compatibility — now drives the abstract engine
   function setBgSrc(src) {
     if (!src || /\.(mp4|webm|mov)$/i.test(src)) return;
-    bgCurrentSrc = src;
-    // Create bgImg lazily if not yet initialized
-    if (!bgImg) bgImg = new Image();
-    bgImg.crossOrigin = "anonymous";
-    bgImg.onload = function() {
-      if (!bgCanvas) initBgCanvas();
-      startBgAnimation();
-    };
-    bgImg.onerror = function() {};
-    bgImg.src = src;
+    // Color extraction (extractFlyerColors) will call setBgPalette via applyThemeColors
     var hiddenImg = document.getElementById("flyer-bg-img");
     if (hiddenImg) hiddenImg.src = src;
   }
 
+  function lerp(a, b, t) { return a + (b - a) * t; }
+
   function drawBgFrame() {
-    if (!bgCtx || !bgCanvas || !bgImg.complete || !bgImg.naturalWidth) return;
+    if (!bgCtx || !bgCanvas) return;
     var W = bgCanvas.width, H = bgCanvas.height;
-    var iW = bgImg.naturalWidth, iH = bgImg.naturalHeight;
+    if (!W || !H) return;
+    var minDim = Math.min(W, H);
 
-    // Auto-fit: calculate scale to COVER the screen
-    // then we'll blur it heavily so overflow doesn't matter
-    var scaleX = W / iW, scaleY = H / iH;
-    var scale  = Math.max(scaleX, scaleY) * 1.06; // slight overscan for blur edges
-    var dW = iW * scale, dH = iH * scale;
-    var dx = (W - dW) / 2, dy = (H - dH) / 2;
+    bgT += 0.008;
 
-    // Subtle drift animation
-    bgT += 0.003;
-    var ox = Math.sin(bgT * 0.7) * W * 0.012;
-    var oy = Math.cos(bgT * 0.5) * H * 0.010;
-    var scaleAnim = 1 + Math.sin(bgT * 0.3) * 0.008;
+    // Advance crossfade
+    if (bgBlendProgress < 1) {
+      bgBlendProgress = Math.min(1, bgBlendProgress + bgBlendSpeed);
+    }
 
-    bgCtx.clearRect(0, 0, W, H);
+    // Background base — near-black so blobs read as glow
+    bgCtx.fillStyle = "#050505";
+    bgCtx.fillRect(0, 0, W, H);
 
-    // Draw blurred background using CSS filter on a temp canvas
     bgCtx.save();
-    bgCtx.filter = "blur(32px) brightness(0.28) saturate(2.2) contrast(1.35)";
-    bgCtx.translate(W/2 + ox, H/2 + oy);
-    bgCtx.scale(scaleAnim, scaleAnim);
-    bgCtx.drawImage(bgImg, -dW/2, -dH/2, dW, dH);
+    bgCtx.filter = "blur(70px) saturate(1.8)";
+    bgCtx.globalCompositeOperation = "screen";
+
+    var fromBlobs = bgPaletteFrom || [];
+    var toBlobs   = bgPaletteTo   || [];
+    var count = Math.max(fromBlobs.length, toBlobs.length);
+
+    for (var i = 0; i < count; i++) {
+      var fb = fromBlobs[i % (fromBlobs.length || 1)];
+      var tb = toBlobs[i % (toBlobs.length || 1)];
+      if (!fb || !tb) continue;
+
+      var t = bgBlendProgress;
+      var r = lerp(fb.color.r, tb.color.r, t);
+      var g = lerp(fb.color.g, tb.color.g, t);
+      var b = lerp(fb.color.b, tb.color.b, t);
+
+      // Drift position using the "to" blob's motion (from fades out visually via color blend)
+      var driftX = tb.x + Math.sin(bgT * 0.4 + tb.phase) * tb.speedX * 300;
+      var driftY = tb.y + Math.cos(bgT * 0.35 + tb.phase) * tb.speedY * 300;
+      var px = lerp(fb.x, driftX, t) * W;
+      var py = lerp(fb.y, driftY, t) * H;
+
+      var pulse = 1 + Math.sin(bgT * tb.pulseSpeed + tb.phase) * 0.15;
+      var radius = lerp(fb.baseR, tb.baseR, t) * minDim * pulse;
+
+      var grad = bgCtx.createRadialGradient(px, py, 0, px, py, radius);
+      grad.addColorStop(0,   "rgba(" + Math.round(r) + "," + Math.round(g) + "," + Math.round(b) + ",0.9)");
+      grad.addColorStop(0.6, "rgba(" + Math.round(r) + "," + Math.round(g) + "," + Math.round(b) + ",0.35)");
+      grad.addColorStop(1,   "rgba(" + Math.round(r) + "," + Math.round(g) + "," + Math.round(b) + ",0)");
+
+      bgCtx.fillStyle = grad;
+      bgCtx.beginPath();
+      bgCtx.arc(px, py, radius, 0, Math.PI * 2);
+      bgCtx.fill();
+    }
+
     bgCtx.restore();
+
+    // Once crossfade completes, promote "to" as the new base
+    if (bgBlendProgress >= 1 && bgPaletteTo) {
+      bgBlobs = bgPaletteTo;
+    }
+
+    // ── Glitch overlay layer ──
+    drawBgGlitch(W, H);
   }
 
-  var bgRafId = null;
+  // Periodic glitch bursts on the abstract background
+  var bgGlitchState = { active: false, nextAt: 0, phase: 0 };
+
+  function drawBgGlitch(W, H) {
+    var now = performance.now();
+    if (!bgGlitchState.active && now > bgGlitchState.nextAt) {
+      bgGlitchState.active = true;
+      bgGlitchState.phase = 0;
+      bgGlitchState.duration = 150 + Math.random() * 250;
+      bgGlitchState.startedAt = now;
+    }
+    if (!bgGlitchState.active) return;
+
+    var elapsed = now - bgGlitchState.startedAt;
+    if (elapsed > bgGlitchState.duration) {
+      bgGlitchState.active = false;
+      bgGlitchState.nextAt = now + 2000 + Math.random() * 5000;
+      return;
+    }
+
+    // RGB slice — grab horizontal strips and offset them
+    var sliceCount = 2 + Math.floor(Math.random() * 3);
+    for (var s = 0; s < sliceCount; s++) {
+      var sy = Math.random() * H;
+      var sh = 4 + Math.random() * 24;
+      var ox = (Math.random() - 0.5) * 40;
+      try {
+        var strip = bgCtx.getImageData(0, sy, W, sh);
+        bgCtx.putImageData(strip, ox, sy);
+      } catch (e) { /* canvas may not be readable cross-origin in rare cases */ }
+    }
+
+    // Faint scanline sweep
+    var sweepY = (elapsed / bgGlitchState.duration) * H;
+    var sweepGrad = bgCtx.createLinearGradient(0, sweepY - 40, 0, sweepY + 40);
+    sweepGrad.addColorStop(0, "rgba(255,255,255,0)");
+    sweepGrad.addColorStop(0.5, "rgba(255,255,255,0.06)");
+    sweepGrad.addColorStop(1, "rgba(255,255,255,0)");
+    bgCtx.fillStyle = sweepGrad;
+    bgCtx.fillRect(0, sweepY - 40, W, 80);
+
+    // Sparse static noise dots
+    bgCtx.fillStyle = "rgba(255,255,255,0.08)";
+    var noiseCount = 40;
+    for (var n = 0; n < noiseCount; n++) {
+      var nx = Math.random() * W, ny = Math.random() * H;
+      bgCtx.fillRect(nx, ny, 1, 1);
+    }
+  }
+
   function startBgAnimation() {
-    if (bgRafId) cancelAnimationFrame(bgRafId);
+    if (bgRafId) return; // already running
     function loop() {
       drawBgFrame();
       bgRafId = requestAnimationFrame(loop);
@@ -3002,6 +3030,8 @@
   function stopBgAnimation() {
     if (bgRafId) { cancelAnimationFrame(bgRafId); bgRafId = null; }
   }
+
+  
 
     // ── TAB NAVIGATION ─────────────────────────────────────────
   var currentTab = "flyers";
@@ -3296,80 +3326,6 @@
     }, 300);
   }
 
-  function startGhostLoop() {
-    var ghost1 = document.getElementById("ghost-1");
-    var ghost2 = document.getElementById("ghost-2");
-    var ghost3 = document.getElementById("ghost-3");
-    if (!ghost1 || !ghost2 || !ghost3) return;
-
-    // Ghost configs: offset, color filter, timing
-    var ghosts = [
-      {
-        el: ghost1,
-        filter: "saturate(0) brightness(0.5) sepia(1) hue-rotate(180deg)",
-        blendMode: "screen",
-        baseDelay: 0
-      },
-      {
-        el: ghost2,
-        filter: "saturate(0) brightness(0.4) sepia(1) hue-rotate(270deg)",
-        blendMode: "color-dodge",
-        baseDelay: 800
-      },
-      {
-        el: ghost3,
-        filter: "saturate(0) brightness(0.35)",
-        blendMode: "screen",
-        baseDelay: 1600
-      }
-    ];
-
-    ghosts.forEach(function(g) {
-      g.el.style.mixBlendMode = g.blendMode;
-      g.el.querySelector("img").style.filter = g.filter;
-      g.el.querySelector("img").style.width = "100%";
-      g.el.querySelector("img").style.display = "block";
-      scheduleGhostFlash(g);
-    });
-  }
-
-  function scheduleGhostFlash(ghost) {
-    if (!skyRunning && !document.getElementById("flyer-screen").style.display.includes("flex")) return;
-    var delay = ghost.baseDelay + Math.random() * 4000 + 1500;
-    setTimeout(function() {
-      flashGhost(ghost);
-    }, delay);
-  }
-
-  function flashGhost(ghost) {
-    var el = ghost.el;
-    var img = el.querySelector("img");
-    // Random offset for this flash
-    var ox = (Math.random() - 0.5) * 24;
-    var oy = (Math.random() - 0.5) * 16;
-    var scale = 0.97 + Math.random() * 0.06;
-    var skewX = (Math.random() - 0.5) * 6;
-
-    // Phase 1 — appear with offset
-    el.style.opacity = (0.15 + Math.random() * 0.35).toFixed(2);
-    el.style.transform = "translate(" + ox + "px," + oy + "px) scale(" + scale + ") skewX(" + skewX + "deg)";
-    img.style.filter = ghost.filter + " contrast(" + (1.2 + Math.random() * 0.6).toFixed(1) + ")";
-
-    // Phase 2 — shift
-    var t1 = 60 + Math.random() * 80;
-    setTimeout(function() {
-      el.style.transform = "translate(" + (-ox*0.5) + "px," + (oy*0.3) + "px) scale(" + (scale*0.99) + ")";
-      el.style.opacity = (0.08 + Math.random() * 0.2).toFixed(2);
-    }, t1);
-
-    // Phase 3 — fade out
-    var t2 = t1 + 40 + Math.random() * 60;
-    setTimeout(function() {
-      el.style.opacity = "0";
-      el.style.transform = "";
-      scheduleGhostFlash(ghost);
-    }, t2);
-  }
 </script>
 </body>
 </html>

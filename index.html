@@ -752,6 +752,285 @@
   }
   .ig-link:hover { color: var(--white); letter-spacing: 0.28em; }
 
+
+  /* ── TAB NAVIGATION ── */
+  #main-tabbar {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 50;
+    display: flex;
+    justify-content: center;
+    gap: 0.3rem;
+    padding: 0.8rem 1rem;
+    background: linear-gradient(to bottom, rgba(0,0,0,0.85), transparent);
+    backdrop-filter: blur(6px);
+  }
+  .tab-btn {
+    background: transparent;
+    border: 1px solid rgba(245,240,232,0.2);
+    color: #888;
+    font-family: 'Space Mono', 'Courier New', monospace;
+    font-size: 0.55rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    padding: 0.4rem 0.7rem;
+    cursor: pointer;
+    transition: color 0.2s, border-color 0.2s, background 0.2s;
+    white-space: nowrap;
+  }
+  .tab-btn:hover { color: var(--white); border-color: rgba(245,240,232,0.5); }
+  .tab-btn.active {
+    color: var(--black);
+    background: var(--white);
+    border-color: var(--white);
+  }
+  @media (max-width: 480px) {
+    #main-tabbar { gap: 0.2rem; padding: 0.6rem 0.5rem; }
+    .tab-btn { font-size: 0.48rem; padding: 0.35rem 0.5rem; }
+  }
+
+  /* ── TAB PANELS ── */
+  .tab-panel {
+    display: none;
+    position: relative;
+    z-index: 10;
+    width: 100%;
+    min-height: 100vh;
+  }
+  .tab-panel.active { display: block; }
+  .tab-content-inner {
+    padding: 6rem 1.5rem 4rem;
+    max-width: 700px;
+    margin: 0 auto;
+  }
+  .tab-title {
+    font-family: 'Orbitron', 'Courier New', monospace;
+    font-size: clamp(1.2rem, 5vw, 2rem);
+    font-weight: 900;
+    letter-spacing: 0.1em;
+    text-align: center;
+    color: var(--white);
+    margin-bottom: 0.5rem;
+  }
+  .tab-subtitle {
+    text-align: center;
+    font-size: 0.75rem;
+    color: #888;
+    letter-spacing: 0.05em;
+    margin-bottom: 2rem;
+  }
+
+  /* ── ARCHIVE GRID ── */
+  .archive-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 0.8rem;
+  }
+  .archive-item {
+    position: relative;
+    aspect-ratio: 3/4;
+    overflow: hidden;
+    cursor: pointer;
+    border: 1px solid rgba(245,240,232,0.15);
+    background: #111;
+  }
+  .archive-item img, .archive-item video {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    transition: transform 0.3s;
+  }
+  .archive-item:hover img, .archive-item:hover video { transform: scale(1.05); }
+  .archive-empty {
+    grid-column: 1 / -1;
+    text-align: center;
+    color: #555;
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+    padding: 3rem 0;
+  }
+
+  /* Lightbox for archive */
+  #archive-lightbox {
+    display: none;
+    position: fixed; inset: 0;
+    z-index: 200;
+    background: rgba(0,0,0,0.92);
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    cursor: zoom-out;
+  }
+  #archive-lightbox.active { display: flex; }
+  #archive-lightbox img, #archive-lightbox video {
+    max-width: 100%; max-height: 100%;
+    object-fit: contain;
+  }
+  .lightbox-close {
+    position: absolute;
+    top: 1.5rem; right: 1.5rem;
+    background: transparent;
+    border: 1px solid rgba(245,240,232,0.4);
+    color: var(--white);
+    font-size: 1.2rem;
+    width: 2.2rem; height: 2.2rem;
+    cursor: pointer;
+    line-height: 1;
+  }
+
+  /* ── DJ APPLICATION FORM ── */
+  .dj-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+  }
+  .form-label {
+    font-size: 0.6rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: #888;
+    margin-top: 1rem;
+  }
+  .form-input {
+    background: transparent;
+    border: 1px solid #333;
+    color: var(--white);
+    font-family: 'Space Mono', 'Courier New', monospace;
+    font-size: 0.85rem;
+    padding: 0.6rem 0.7rem;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .form-input:focus { border-color: var(--white); }
+  .form-textarea { min-height: 90px; resize: vertical; }
+  .form-submit-btn {
+    margin-top: 1.5rem;
+    background: var(--white);
+    color: var(--black);
+    border: none;
+    font-family: 'Bebas Neue','Arial Narrow',Impact,sans-serif;
+    font-size: 1.3rem;
+    letter-spacing: 0.2em;
+    padding: 0.8rem;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  .form-submit-btn:hover { opacity: 0.85; }
+  .form-submit-btn:disabled { opacity: 0.5; cursor: default; }
+  #dj-form-status {
+    margin-top: 0.8rem;
+    font-size: 0.65rem;
+    letter-spacing: 0.1em;
+    text-align: center;
+    display: none;
+  }
+  #dj-form-status.ok  { color: #2ecc71; display: block; }
+  #dj-form-status.err { color: #e63329; display: block; }
+
+  /* ── MEMBERS GRID ── */
+  .members-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 1.5rem;
+  }
+  .member-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+  .member-avatar {
+    width: 90px; height: 90px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #222, #111);
+    border: 1px solid rgba(245,240,232,0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Orbitron', monospace;
+    font-size: 1.5rem;
+    color: #444;
+    margin-bottom: 0.7rem;
+  }
+  .member-name {
+    font-family: 'Bebas Neue','Arial Narrow',Impact,sans-serif;
+    font-size: 1.1rem;
+    letter-spacing: 0.1em;
+    color: var(--white);
+  }
+  .member-role {
+    font-size: 0.6rem;
+    letter-spacing: 0.15em;
+    color: #666;
+    text-transform: uppercase;
+    margin-top: 0.2rem;
+  }
+  .member-socials {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+  }
+  .member-social-placeholder {
+    width: 20px; height: 20px;
+    border: 1px solid #333;
+    border-radius: 50%;
+  }
+
+
+  /* ── ADMIN PROFILE EDITOR ── */
+  .profile-photo-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 0.5rem;
+  }
+  .profile-photo-preview {
+    width: 70px; height: 70px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #222, #111);
+    border: 1px solid rgba(245,240,232,0.2);
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
+    flex-shrink: 0;
+    font-family: 'Orbitron', monospace;
+    font-size: 1.4rem;
+    color: #444;
+  }
+  .profile-photo-preview img { width: 100%; height: 100%; object-fit: cover; }
+  .profile-photo-controls { flex: 1; }
+  .btn-secondary {
+    background: transparent;
+    border: 1px solid #444;
+    color: var(--white);
+    font-family: 'Space Mono', 'Courier New', monospace;
+    font-size: 0.6rem;
+    letter-spacing: 0.1em;
+    padding: 0.5rem 0.8rem;
+    cursor: pointer;
+    transition: border-color 0.2s;
+  }
+  .btn-secondary:hover { border-color: var(--white); }
+
+
+  .member-bio {
+    font-size: 0.65rem;
+    color: #888;
+    line-height: 1.5;
+    margin-top: 0.4rem;
+    max-width: 160px;
+  }
+  .member-social-link {
+    width: 24px; height: 24px;
+    border: 1px solid #444;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.5rem;
+    letter-spacing: 0.05em;
+    color: #888;
+    text-decoration: none;
+    transition: border-color 0.2s, color 0.2s;
+  }
+  .member-social-link:hover { border-color: var(--white); color: var(--white); }
+
 </style>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
 </head>
@@ -786,6 +1065,14 @@
 
 <!-- ── FLYER SCREEN ── -->
 <div id="flyer-screen">
+  <!-- Tab navigation -->
+  <div id="main-tabbar">
+    <button class="tab-btn active" data-tab="flyers" onclick="switchTab('flyers')">Flyers</button>
+    <button class="tab-btn" data-tab="archive" onclick="switchTab('archive')">Past Shows</button>
+    <button class="tab-btn" data-tab="dj-apply" onclick="switchTab('dj-apply')">DJ Apply</button>
+    <button class="tab-btn" data-tab="members" onclick="switchTab('members')">Members</button>
+  </div>
+
   <!-- Fixed background layers -->
   <div id="flyer-bg">
     <canvas id="flyer-bg-canvas"></canvas>
@@ -804,7 +1091,58 @@
   <canvas id="ghost-squid-canvas" class="ghost-flash" style="width:clamp(100px,18vw,240px);height:clamp(100px,18vw,240px);"></canvas>
 
   <!-- Scrollable sections built by JS -->
-  <div id="flyer-sections"></div>
+  <div id="tab-flyers" class="tab-panel active">
+    <div id="flyer-sections"></div>
+  </div>
+
+  <div id="tab-archive" class="tab-panel">
+    <div class="tab-content-inner">
+      <h2 class="tab-title">PAST SHOWS</h2>
+      <div id="archive-grid" class="archive-grid"></div>
+    </div>
+  </div>
+
+  <div id="tab-dj-apply" class="tab-panel">
+    <div class="tab-content-inner">
+      <h2 class="tab-title">PLAY WITH US</h2>
+      <p class="tab-subtitle">Send us your info and a mix — we listen to everything.</p>
+      <form id="dj-form" class="dj-form" action="https://formspree.io/f/meeylona" method="POST">
+        <label class="form-label">Name / DJ Alias</label>
+        <input class="form-input" type="text" name="name" required>
+
+        <label class="form-label">Contact (email or phone)</label>
+        <input class="form-input" type="text" name="contact" required>
+
+        <label class="form-label">Genre(s)</label>
+        <input class="form-input" type="text" name="genres" placeholder="e.g. techno, house, dnb" required>
+
+        <label class="form-label">Socials</label>
+        <input class="form-input" type="text" name="socials" placeholder="Instagram, SoundCloud, etc.">
+
+        <label class="form-label">Mix Link</label>
+        <input class="form-input" type="url" name="mix_link" placeholder="https://" required>
+
+        <label class="form-label">Anything else?</label>
+        <textarea class="form-input form-textarea" name="message" placeholder="Tell us about yourself..."></textarea>
+
+        <button type="submit" class="form-submit-btn" id="dj-submit-btn">SEND APPLICATION</button>
+        <div id="dj-form-status"></div>
+      </form>
+    </div>
+  </div>
+
+  <div id="tab-members" class="tab-panel">
+    <div class="tab-content-inner">
+      <h2 class="tab-title">MEET THE MEMBERS</h2>
+      <div id="members-grid" class="members-grid"></div>
+    </div>
+  </div>
+
+  <!-- Archive lightbox -->
+  <div id="archive-lightbox" onclick="closeLightbox()">
+    <button class="lightbox-close" onclick="event.stopPropagation(); closeLightbox()">&#10005;</button>
+    <div id="lightbox-content"></div>
+  </div>
 </div>
 
 <!-- ── ADMIN SCREEN ── -->
@@ -884,6 +1222,42 @@
   </div>
 
   
+
+  <!-- Member Profile Editor -->
+  <div class="admin-section fade-in">
+    <div class="section-label">// My Profile</div>
+    <p style="font-size:0.6rem;letter-spacing:0.1em;color:#555;line-height:1.8;margin-bottom:1rem;">Shown on the Members tab. Only you can edit your own card.</p>
+
+    <div class="profile-photo-row">
+      <div class="profile-photo-preview" id="profile-photo-preview">
+        <span id="profile-photo-initial"></span>
+      </div>
+      <div class="profile-photo-controls">
+        <input type="file" id="profile-photo-input" accept="image/png,image/jpeg,image/webp" style="display:none;" onchange="handlePhotoSelect(event)">
+        <button class="btn-secondary" onclick="document.getElementById('profile-photo-input').click()">UPLOAD PHOTO</button>
+        <div id="profile-photo-status" style="font-size:0.55rem;letter-spacing:0.1em;color:#555;margin-top:0.4rem;"></div>
+      </div>
+    </div>
+
+    <label class="form-label" style="margin-top:1rem;">Bio</label>
+    <textarea class="msg-textarea" id="profile-bio" placeholder="A short bio about you..." maxlength="300" oninput="updateProfileBioCount()"></textarea>
+    <div class="msg-char-count"><span id="profile-bio-count">0</span>/300</div>
+
+    <label class="form-label">Instagram</label>
+    <input class="form-input" id="profile-instagram" type="text" placeholder="@handle or full URL">
+
+    <label class="form-label">SoundCloud</label>
+    <input class="form-input" id="profile-soundcloud" type="text" placeholder="Profile URL">
+
+    <label class="form-label">Spotify</label>
+    <input class="form-input" id="profile-spotify" type="text" placeholder="Artist/profile URL">
+
+    <label class="form-label">Latest Track / Other Link</label>
+    <input class="form-input" id="profile-track" type="text" placeholder="Link to your newest release">
+
+    <button class="msg-save-btn" onclick="saveProfile()" style="margin-top:1rem;">SAVE PROFILE</button>
+    <div id="profile-status"></div>
+  </div>
 
   <!-- Message Board -->
   <div class="admin-section fade-in">
@@ -1450,6 +1824,7 @@
           } else {
             loadAdminMessageForFlyer();
           }
+          loadAdminProfile();
         }, 400);
 
       } else if (data.role === "user") {
@@ -1515,7 +1890,120 @@
   }
 
   // ── ADMIN STATS RENDER ────────────────────────────────────
-  function updateAdminPreview(src) {
+  // ── ADMIN PROFILE EDITOR ─────────────────────────────────────
+  var selectedPhotoFile = null;
+  var currentProfileData = {};
+
+  function loadAdminProfile() {
+    if (!currentAdminPassword) return;
+    var displayName = ADMIN_NAMES[currentAdminPassword.toLowerCase()] || currentAdminPassword;
+    var initialEl = document.getElementById("profile-photo-initial");
+    if (initialEl) initialEl.textContent = displayName.charAt(0).toUpperCase();
+
+    fetch("/.netlify/functions/get-profile?admin=" + encodeURIComponent(currentAdminPassword))
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        currentProfileData = data || {};
+        document.getElementById("profile-bio").value        = data.bio || "";
+        document.getElementById("profile-instagram").value  = data.instagram || "";
+        document.getElementById("profile-soundcloud").value = data.soundcloud || "";
+        document.getElementById("profile-spotify").value    = data.spotify || "";
+        document.getElementById("profile-track").value      = data.track || "";
+        updateProfileBioCount();
+
+        var preview = document.getElementById("profile-photo-preview");
+        if (data.photoUrl) {
+          preview.innerHTML = "<img src='" + data.photoUrl + "' alt=''>";
+        } else {
+          preview.innerHTML = "<span>" + displayName.charAt(0).toUpperCase() + "</span>";
+        }
+      })
+      .catch(function() {});
+  }
+
+  function updateProfileBioCount() {
+    var bio = document.getElementById("profile-bio");
+    var count = document.getElementById("profile-bio-count");
+    if (bio && count) count.textContent = bio.value.length;
+  }
+
+  function handlePhotoSelect(event) {
+    var file = event.target.files[0];
+    if (!file) return;
+    if (file.size > 3 * 1024 * 1024) {
+      document.getElementById("profile-photo-status").textContent = "✗ Max file size 3MB";
+      return;
+    }
+    selectedPhotoFile = file;
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      document.getElementById("profile-photo-preview").innerHTML =
+        "<img src='" + e.target.result + "' alt=''>";
+    };
+    reader.readAsDataURL(file);
+    document.getElementById("profile-photo-status").textContent = "Photo selected — click Save Profile to upload";
+  }
+
+  function saveProfile() {
+    var btn = document.querySelector('[onclick="saveProfile()"]');
+    var statusEl = document.getElementById("profile-status");
+    btn.textContent = "SAVING...";
+    btn.disabled = true;
+
+    var profileData = {
+      password:   currentAdminPassword,
+      bio:        document.getElementById("profile-bio").value,
+      instagram:  document.getElementById("profile-instagram").value,
+      soundcloud: document.getElementById("profile-soundcloud").value,
+      spotify:    document.getElementById("profile-spotify").value,
+      track:      document.getElementById("profile-track").value
+    };
+
+    function doSave(photoBase64) {
+      if (photoBase64) profileData.photoBase64 = photoBase64;
+      fetch("/.netlify/functions/set-profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(profileData)
+      })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        btn.textContent = "SAVE PROFILE";
+        btn.disabled = false;
+        if (data.success) {
+          statusEl.textContent = "✓ Profile saved";
+          statusEl.className = "ok";
+          statusEl.style.display = "block";
+          selectedPhotoFile = null;
+          document.getElementById("profile-photo-status").textContent = "";
+          setTimeout(function(){ statusEl.style.display = "none"; }, 3000);
+        } else {
+          statusEl.textContent = "✗ " + (data.error || "Save failed");
+          statusEl.className = "err";
+          statusEl.style.display = "block";
+        }
+      })
+      .catch(function() {
+        btn.textContent = "SAVE PROFILE";
+        btn.disabled = false;
+        statusEl.textContent = "✗ Connection error";
+        statusEl.className = "err";
+        statusEl.style.display = "block";
+      });
+    }
+
+    if (selectedPhotoFile) {
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        doSave(e.target.result); // base64 data URL
+      };
+      reader.readAsDataURL(selectedPhotoFile);
+    } else {
+      doSave(null);
+    }
+  }
+
+    function updateAdminPreview(src) {
     var el = document.getElementById("admin-flyer-preview");
     if (!el) return;
     // If specific src provided use it, otherwise use first non-video
@@ -2497,6 +2985,195 @@
     if (bgRafId) { cancelAnimationFrame(bgRafId); bgRafId = null; }
   }
 
+    // ── TAB NAVIGATION ─────────────────────────────────────────
+  var currentTab = "flyers";
+  var archiveLoaded = false;
+  var membersLoaded = false;
+
+  function switchTab(tabName) {
+    if (tabName === currentTab) return;
+    currentTab = tabName;
+
+    document.querySelectorAll(".tab-btn").forEach(function(btn) {
+      btn.classList.toggle("active", btn.dataset.tab === tabName);
+    });
+    document.querySelectorAll(".tab-panel").forEach(function(panel) {
+      panel.classList.remove("active");
+    });
+    document.getElementById("tab-" + tabName).classList.add("active");
+
+    if (tabName === "archive" && !archiveLoaded) {
+      loadArchiveGrid();
+      archiveLoaded = true;
+    }
+    if (tabName === "members" && !membersLoaded) {
+      buildMembersGrid();
+      membersLoaded = true;
+    }
+  }
+
+  // ── ARCHIVE / PAST SHOWS GRID ─────────────────────────────────
+  function loadArchiveGrid() {
+    var grid = document.getElementById("archive-grid");
+    if (!grid) return;
+    fetch("/archive.json?v=" + Date.now())
+      .then(function(r) { return r.json(); })
+      .then(function(manifest) {
+        if (!Array.isArray(manifest) || !manifest.length) {
+          grid.innerHTML = "<div class='archive-empty'>// No past shows yet</div>";
+          return;
+        }
+        grid.innerHTML = "";
+        manifest.forEach(function(name) {
+          var src = "archive/" + name;
+          var isVideo = /\.(mp4|webm|mov)$/i.test(name);
+          var item = document.createElement("div");
+          item.className = "archive-item";
+          item.onclick = function() { openLightbox(src, isVideo); };
+          if (isVideo) {
+            var vid = document.createElement("video");
+            vid.src = src; vid.muted = true; vid.loop = true;
+            vid.playsInline = true;
+            item.appendChild(vid);
+            item.addEventListener("mouseenter", function() { vid.play().catch(function(){}); });
+            item.addEventListener("mouseleave", function() { vid.pause(); });
+          } else {
+            var img = document.createElement("img");
+            img.src = src; img.alt = name; img.loading = "lazy";
+            item.appendChild(img);
+          }
+          grid.appendChild(item);
+        });
+      })
+      .catch(function() {
+        grid.innerHTML = "<div class='archive-empty'>// Could not load past shows</div>";
+      });
+  }
+
+  function openLightbox(src, isVideo) {
+    var lb = document.getElementById("archive-lightbox");
+    var content = document.getElementById("lightbox-content");
+    content.innerHTML = "";
+    if (isVideo) {
+      var vid = document.createElement("video");
+      vid.src = src; vid.controls = true; vid.autoplay = true; vid.loop = true;
+      content.appendChild(vid);
+    } else {
+      var img = document.createElement("img");
+      img.src = src;
+      content.appendChild(img);
+    }
+    lb.classList.add("active");
+  }
+
+  function closeLightbox() {
+    document.getElementById("archive-lightbox").classList.remove("active");
+    document.getElementById("lightbox-content").innerHTML = "";
+  }
+
+  // ── DJ APPLICATION FORM ───────────────────────────────────────
+  function initDjForm() {
+    var form = document.getElementById("dj-form");
+    if (!form || form.dataset.wired) return;
+    form.dataset.wired = "true";
+    form.addEventListener("submit", function(e) {
+      e.preventDefault();
+      var btn = document.getElementById("dj-submit-btn");
+      var status = document.getElementById("dj-form-status");
+      btn.disabled = true;
+      btn.textContent = "SENDING...";
+
+      fetch(form.action, {
+        method: "POST",
+        body: new FormData(form),
+        headers: { "Accept": "application/json" }
+      })
+      .then(function(r) {
+        if (r.ok) {
+          status.textContent = "✓ Application sent — we'll be in touch";
+          status.className = "ok";
+          form.reset();
+        } else {
+          status.textContent = "✗ Something went wrong — try again";
+          status.className = "err";
+        }
+      })
+      .catch(function() {
+        status.textContent = "✗ Connection error — try again";
+        status.className = "err";
+      })
+      .finally(function() {
+        btn.disabled = false;
+        btn.textContent = "SEND APPLICATION";
+      });
+    });
+  }
+
+  // ── MEMBERS GRID ───────────────────────────────────────────────
+  // Edit this array to add photos, roles, and social links later
+  var MEMBERS = [
+    { name: "Squidly",        role: "" },
+    { name: "Desty",          role: "" },
+    { name: "Lesbreehonest",  role: "" },
+    { name: "Kryptid",        role: "" },
+    { name: "Bracci",         role: "" },
+    { name: "Oracle",         role: "" }
+  ];
+
+  function buildMembersGrid() {
+    var grid = document.getElementById("members-grid");
+    if (!grid) return;
+    grid.innerHTML = "<div class='archive-empty'>// Loading members...</div>";
+
+    fetch("/.netlify/functions/get-profile?all=true")
+      .then(function(r) { return r.json(); })
+      .then(function(profiles) {
+        grid.innerHTML = "";
+        MEMBERS.forEach(function(m) {
+          var key = m.name.toLowerCase();
+          var p = (profiles && profiles[key]) || {};
+          var card = document.createElement("div");
+          card.className = "member-card";
+          var initial = m.name.charAt(0).toUpperCase();
+
+          var avatarHtml = p.photoUrl
+            ? "<div class='member-avatar' style='overflow:hidden;'><img src='" + p.photoUrl + "' style='width:100%;height:100%;object-fit:cover;' alt=''></div>"
+            : "<div class='member-avatar'>" + initial + "</div>";
+
+          var socialLinks = "";
+          if (p.instagram)  socialLinks += "<a href='" + normalizeUrl(p.instagram, 'instagram') + "' target='_blank' class='member-social-link'>IG</a>";
+          if (p.soundcloud) socialLinks += "<a href='" + p.soundcloud + "' target='_blank' class='member-social-link'>SC</a>";
+          if (p.spotify)    socialLinks += "<a href='" + p.spotify + "' target='_blank' class='member-social-link'>SP</a>";
+          if (p.track)      socialLinks += "<a href='" + p.track + "' target='_blank' class='member-social-link'>▶</a>";
+
+          card.innerHTML =
+            avatarHtml +
+            "<div class='member-name'>" + m.name + "</div>" +
+            (p.bio ? "<div class='member-bio'>" + p.bio + "</div>" : "") +
+            (socialLinks ? "<div class='member-socials'>" + socialLinks + "</div>" : "");
+          grid.appendChild(card);
+        });
+      })
+      .catch(function() {
+        grid.innerHTML = "";
+        MEMBERS.forEach(function(m) {
+          var card = document.createElement("div");
+          card.className = "member-card";
+          var initial = m.name.charAt(0).toUpperCase();
+          card.innerHTML =
+            "<div class='member-avatar'>" + initial + "</div>" +
+            "<div class='member-name'>" + m.name + "</div>";
+          grid.appendChild(card);
+        });
+      });
+  }
+
+  function normalizeUrl(handle, platform) {
+    if (handle.startsWith("http")) return handle;
+    if (platform === "instagram") return "https://instagram.com/" + handle.replace("@", "");
+    return handle;
+  }
+
     function startFlyerGlitch(){
     flyerGlitchLoop();
     initSkyline();
@@ -2526,6 +3203,7 @@
   }
 
   function initGallery() {
+    initDjForm();
     // Fetch config for flyer order + admin names, then build
     fetch("/.netlify/functions/get-config")
       .then(function(r) { return r.json(); })

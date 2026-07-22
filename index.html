@@ -136,7 +136,7 @@
     display: none;
     position: fixed; inset: 0;
     flex-direction: column; align-items: center;
-    padding: 3rem 1.5rem max(2rem, env(safe-area-inset-bottom, 1rem));
+    padding: 0;
     overflow-y: auto; overflow-x: hidden;
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
@@ -577,6 +577,10 @@
   }
 
   /* Scroll sections */
+  #tab-flyers.tab-panel {
+    padding-top: 0; /* flyer-section handles its own top spacing to clear tab bar */
+    min-height: 0;
+  }
   #flyer-sections {
     position: relative;
     z-index: 10;
@@ -591,13 +595,13 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 2rem 1rem 3rem;
+    padding: 5.5rem 1rem 3rem;
     min-height: 100vh;
     scroll-snap-align: start;
     box-sizing: border-box;
     width: 100%;
   }
-  #flyer-screen {
+  #tab-flyers {
     scroll-snap-type: y mandatory;
   }
   .flyer-section .flyer-container {
@@ -760,9 +764,10 @@
     z-index: 50;
     display: flex;
     justify-content: center;
+    flex-wrap: wrap;
     gap: 0.3rem;
     padding: 0.8rem 1rem;
-    background: linear-gradient(to bottom, rgba(0,0,0,0.85), transparent);
+    background: linear-gradient(to bottom, rgba(0,0,0,0.92) 60%, transparent);
     backdrop-filter: blur(6px);
   }
   .tab-btn {
@@ -787,6 +792,13 @@
   @media (max-width: 480px) {
     #main-tabbar { gap: 0.2rem; padding: 0.6rem 0.5rem; }
     .tab-btn { font-size: 0.48rem; padding: 0.35rem 0.5rem; }
+    .tab-panel { padding-top: 4.8rem; }
+    .flyer-section { padding-top: 4.8rem; }
+    .archive-grid, .members-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); }
+  }
+  @media (min-width: 900px) {
+    .tab-content-inner { max-width: 800px; }
+    .archive-grid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
   }
 
   /* ── TAB PANELS ── */
@@ -796,10 +808,12 @@
     z-index: 10;
     width: 100%;
     min-height: 100vh;
+    padding-top: 5.5rem; /* clears the fixed tab bar */
+    box-sizing: border-box;
   }
   .tab-panel.active { display: block; }
   .tab-content-inner {
-    padding: 6rem 1.5rem 4rem;
+    padding: 0 1.5rem 4rem;
     max-width: 700px;
     margin: 0 auto;
   }
@@ -899,6 +913,9 @@
     padding: 0.6rem 0.7rem;
     outline: none;
     transition: border-color 0.2s;
+    width: 100%;
+    box-sizing: border-box;
+    -webkit-appearance: none;
   }
   .form-input:focus { border-color: var(--white); }
   .form-textarea { min-height: 90px; resize: vertical; }
@@ -982,6 +999,7 @@
     align-items: center;
     gap: 1rem;
     margin-bottom: 0.5rem;
+    flex-wrap: wrap;
   }
   .profile-photo-preview {
     width: 70px; height: 70px;
@@ -3001,6 +3019,10 @@
       panel.classList.remove("active");
     });
     document.getElementById("tab-" + tabName).classList.add("active");
+
+    // Reset scroll position — #flyer-screen is the scrollable container
+    var scrollContainer = document.getElementById("flyer-screen");
+    if (scrollContainer) scrollContainer.scrollTop = 0;
 
     if (tabName === "archive" && !archiveLoaded) {
       loadArchiveGrid();

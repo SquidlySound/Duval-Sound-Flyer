@@ -2807,75 +2807,100 @@
     if (ta && ct) ct.textContent = ta.value.length;
   }
 
-    // ── ABSTRACT PALETTE BACKGROUND ENGINE ────────────────────────
-  // Flowing gradient blobs colored from the current flyer's palette,
-  // crossfading smoothly between flyers as you scroll. Glitch bursts
-  // (RGB slice, scanline sweep, static noise) layer on top periodically.
+    // ── METABALL LAVA LAMP BACKGROUND ENGINE ──────────────────────
+  // Blob shapes, positions, and motion are generated ONCE per session and
+  // never regenerated. Switching flyers only crossfades color — shape and
+  // position state persists untouched across every palette change.
   var bgCanvas = null, bgCtx = null;
+  var fieldCanvas = null, fieldCtx = null;
+  var FIELD_SCALE = 0.16;
+  var bgT = 0;
   var bgRafId = null;
 
-  // Two palette states for crossfading between flyers
-  var bgT = 0;
-  var bgPaletteFrom = null;
-  var bgPaletteTo   = null;
-  var bgBlendProgress = 1; // 1 = fully on "to" palette
-  var bgBlendSpeed = 0.012;
+  var bgBlobs = [];          // persistent blob shape/motion state — created once
+  var colorFrom = null;      // color palette we're fading from
+  var colorTo   = null;      // palette we're fading to
+  var colorBlendProgress = 1;
+  var colorBlendSpeed = 0.004;
 
-  // Blob definitions — regenerated per palette, drift independently
-  var bgBlobs = [];
+  // Warmup sequence — lamp "heating up" on first load
+  var warmupActive = false;
+  var warmupStart = 0;
+  var WARMUP_DURATION = 7000;
 
   function initBgCanvas() {
     bgCanvas = document.getElementById("flyer-bg-canvas");
     if (!bgCanvas) return;
     bgCtx = bgCanvas.getContext("2d");
+    fieldCanvas = document.createElement("canvas");
+    fieldCtx = fieldCanvas.getContext("2d");
     resizeBgCanvas();
     window.addEventListener("resize", resizeBgCanvas);
-    startBgAnimation(); // runs continuously for the glitch overlay
+    startBgAnimation();
   }
 
   function resizeBgCanvas() {
     if (!bgCanvas) return;
     bgCanvas.width  = window.innerWidth;
     bgCanvas.height = window.innerHeight;
+    fieldCanvas.width  = Math.max(1, Math.round(bgCanvas.width  * FIELD_SCALE));
+    fieldCanvas.height = Math.max(1, Math.round(bgCanvas.height * FIELD_SCALE));
   }
 
-  function makeBlobsFromPalette(palette) {
-    var colors = palette && palette.length ? palette : [{r:120,g:120,b:140}];
+  // Blob shape/motion state — generated once, colors live separately
+  function generateBlobShapes() {
     var blobs = [];
-    var count = 5 + Math.floor(Math.random() * 2); // 5-6 blobs
+    var count = 3 + Math.floor(Math.random() * 2); // 3-4 blobs
     for (var i = 0; i < count; i++) {
-      var c = colors[i % colors.length];
       blobs.push({
-        color: c,
-        x: 0.15 + Math.random() * 0.7,       // horizontal home position
-        baseR: 0.16 + Math.random() * 0.13,  // relative to min(W,H) — lava blobs are smaller/rounder
-        // Vertical rise/fall cycle — travels from near-bottom to near-top and back
-        cycleLen: 14 + Math.random() * 10,   // seconds for one full up-down cycle
-        cyclePhase: Math.random(),           // 0-1 offset so blobs don't move in sync
-        riseRange: 0.55 + Math.random() * 0.25, // how much of the screen height it travels
-        // Gentle horizontal sway while rising, like real wax currents
-        swayAmp: 0.03 + Math.random() * 0.05,
-        swaySpeed: 0.08 + Math.random() * 0.1,
-        phase: Math.random() * Math.PI * 2
+        x: 0.2 + Math.random() * 0.6,
+        baseR: 0.20 + Math.random() * 0.14,
+        cycleLen: 32 + Math.random() * 18,   // slow, heavy lava-lamp timing
+        cyclePhase: Math.random(),
+        riseRange: 0.5 + Math.random() * 0.25,
+        swayAmp: 0.025 + Math.random() * 0.035,
+        swaySpeed: 0.05 + Math.random() * 0.06,
+        phase: Math.random() * Math.PI * 2,
+        teardropStrength: 0.5 + Math.random() * 0.5,
+        warmupDelay: Math.random() * 0.35
       });
     }
     return blobs;
   }
 
-  // Called when scrolling to a new flyer — begins crossfade to its palette
+  // Called whenever a new flyer's palette is extracted. Shape/position state
+  // is untouched — only color crossfades. First call ever also triggers warmup.
   function setBgPalette(palette) {
     if (!palette || !palette.length) return;
-    bgPaletteFrom = bgBlobs.length ? bgBlobs : makeBlobsFromPalette(palette);
-    bgPaletteTo   = makeBlobsFromPalette(palette);
-    bgBlendProgress = 0;
+
+    if (!bgBlobs.length) {
+      bgBlobs = generateBlobShapes();
+      colorTo = assignColors(palette);
+      colorFrom = colorTo;
+      colorBlendProgress = 1;
+      startWarmup();
+    } else {
+      colorFrom = colorTo || assignColors(palette);
+      colorTo   = assignColors(palette);
+      colorBlendProgress = 0;
+    }
+
     if (!bgCanvas) initBgCanvas();
     startBgAnimation();
   }
 
-  // Legacy entry point kept for compatibility — now drives the abstract engine
+  function assignColors(palette) {
+    return bgBlobs.map(function(_, i) { return palette[i % palette.length]; });
+  }
+
+  function startWarmup() {
+    warmupActive = true;
+    warmupStart = performance.now();
+  }
+
+  // Legacy entry point kept for compatibility — the abstract engine is driven by setBgPalette
   function setBgSrc(src) {
     if (!src || /\.(mp4|webm|mov)$/i.test(src)) return;
-    // Color extraction (extractFlyerColors) will call setBgPalette via applyThemeColors
     var hiddenImg = document.getElementById("flyer-bg-img");
     if (hiddenImg) hiddenImg.src = src;
   }
@@ -2883,89 +2908,171 @@
   function lerp(a, b, t) { return a + (b - a) * t; }
 
   function drawBgFrame() {
-    if (!bgCtx || !bgCanvas) return;
+    if (!bgCtx || !bgCanvas || !fieldCtx || !bgBlobs.length) return;
     var W = bgCanvas.width, H = bgCanvas.height;
-    if (!W || !H) return;
+    var FW = fieldCanvas.width, FH = fieldCanvas.height;
+    if (!W || !H || !FW || !FH) return;
     var minDim = Math.min(W, H);
 
-    // Time-based only — never reads scroll position, so blobs stay put regardless of page scroll
     bgT += 0.008;
 
-    // Advance crossfade
-    if (bgBlendProgress < 1) {
-      bgBlendProgress = Math.min(1, bgBlendProgress + bgBlendSpeed);
+    if (colorBlendProgress < 1) {
+      colorBlendProgress = Math.min(1, colorBlendProgress + colorBlendSpeed);
     }
 
-    // Background base — near-black so blobs read as glow
+    var warmupT = 1;
+    if (warmupActive) {
+      var elapsed = performance.now() - warmupStart;
+      warmupT = Math.min(1, elapsed / WARMUP_DURATION);
+      if (warmupT >= 1) warmupActive = false;
+    }
+
+    var t = colorBlendProgress;
+
+    var states = bgBlobs.map(function(blob, i) {
+      var cFrom = colorFrom[i] || colorFrom[0];
+      var cTo   = colorTo[i]   || colorTo[0];
+      var r = lerp(cFrom.r, cTo.r, t);
+      var g = lerp(cFrom.g, cTo.g, t);
+      var b = lerp(cFrom.b, cTo.b, t);
+
+      var cycleT = ((bgT / blob.cycleLen) + blob.cyclePhase) % 1;
+      var eased = 0.5 - 0.5 * Math.cos(cycleT * Math.PI * 2);
+      var riseY = 1.0 - eased * blob.riseRange;
+
+      var speedFactor = Math.sin(cycleT * Math.PI * 2);
+      var stretch = 1 + Math.abs(speedFactor) * 0.6 * blob.teardropStrength;
+      var squash  = 1 - Math.abs(speedFactor) * 0.25 * blob.teardropStrength;
+
+      var sway = Math.sin(bgT * blob.swaySpeed + blob.phase) * blob.swayAmp;
+      var x = blob.x + sway;
+
+      // Warmup — each blob eases from the pooled bottom strip up into its
+      // normal cycle, staggered per-blob with equal-length rise windows and
+      // a smootherstep curve so there is no snap at either end of the motion.
+      if (warmupActive || warmupT < 1) {
+        var windowLen = 0.62;
+        var localT = Math.max(0, Math.min(1, (warmupT - blob.warmupDelay) / windowLen));
+        var emergeEase = localT * localT * localT * (localT * (localT * 6 - 15) + 10);
+        riseY = lerp(0.96, riseY, emergeEase);
+        var poolAmount = 1 - emergeEase;
+        squash = squash + poolAmount * 0.6;
+        stretch = stretch - poolAmount * 0.25;
+      }
+
+      return { r:r, g:g, b:b, x:x, y:riseY, radius:blob.baseR, stretch:stretch, squash:squash };
+    });
+
+    // ── METABALL FIELD PASS ──
+    // Blobs render additively onto a low-res field, then get heavily blurred
+    // and upscaled — overlapping blobs brighten together and read as one
+    // merged shape, exactly like real lava lamp wax touching and fusing.
+    fieldCtx.clearRect(0, 0, FW, FH);
+    fieldCtx.fillStyle = "#000";
+    fieldCtx.fillRect(0, 0, FW, FH);
+    fieldCtx.globalCompositeOperation = "lighter";
+
+    states.forEach(function(s) {
+      var px = s.x * FW;
+      var py = s.y * FH;
+      var radius = s.radius * minDim * FIELD_SCALE;
+      var radiusX = radius * s.squash;
+      var radiusY = radius * s.stretch;
+
+      fieldCtx.save();
+      fieldCtx.translate(px, py);
+      fieldCtx.scale(radiusX / radius, radiusY / radius);
+
+      var grad = fieldCtx.createRadialGradient(0, 0, 0, 0, 0, radius);
+      grad.addColorStop(0,    "rgba(" + Math.round(s.r) + "," + Math.round(s.g) + "," + Math.round(s.b) + ",1)");
+      grad.addColorStop(0.55, "rgba(" + Math.round(s.r) + "," + Math.round(s.g) + "," + Math.round(s.b) + ",0.55)");
+      grad.addColorStop(1,    "rgba(" + Math.round(s.r) + "," + Math.round(s.g) + "," + Math.round(s.b) + ",0)");
+      fieldCtx.fillStyle = grad;
+      fieldCtx.beginPath();
+      fieldCtx.arc(0, 0, radius, 0, Math.PI * 2);
+      fieldCtx.fill();
+      fieldCtx.restore();
+    });
+
+    // Permanent bottom edge glow — like the base heating element glow of a
+    // real lava lamp. Thin at rest, taller/brighter during warmup.
+    var avgR = 0, avgG = 0, avgB = 0;
+    states.forEach(function(s){ avgR += s.r; avgG += s.g; avgB += s.b; });
+    avgR /= states.length; avgG /= states.length; avgB /= states.length;
+
+    var warmupBoost = (warmupActive || warmupT < 1) ? (1 - warmupT) : 0;
+    var stripH = FH * (0.05 + 0.13 * warmupBoost);
+    var stripAlphaTop    = 0.35 + 0.55 * warmupBoost;
+    var stripAlphaBottom = 0.6  + 0.35 * warmupBoost;
+
+    var stripGrad = fieldCtx.createLinearGradient(0, FH - stripH, 0, FH);
+    stripGrad.addColorStop(0, "rgba(" + Math.round(avgR) + "," + Math.round(avgG) + "," + Math.round(avgB) + "," + stripAlphaTop + ")");
+    stripGrad.addColorStop(1, "rgba(" + Math.round(avgR) + "," + Math.round(avgG) + "," + Math.round(avgB) + "," + stripAlphaBottom + ")");
+    fieldCtx.fillStyle = stripGrad;
+    fieldCtx.fillRect(0, FH - stripH, FW, stripH);
+
+    // ── COMPOSITE TO MAIN CANVAS ──
     bgCtx.fillStyle = "#050505";
     bgCtx.fillRect(0, 0, W, H);
 
     bgCtx.save();
-    bgCtx.filter = "blur(70px) saturate(1.8)";
+    bgCtx.filter = "blur(38px) saturate(2.2) contrast(1.3)";
     bgCtx.globalCompositeOperation = "screen";
-
-    var fromBlobs = bgPaletteFrom || [];
-    var toBlobs   = bgPaletteTo   || [];
-    var count = Math.max(fromBlobs.length, toBlobs.length);
-
-    for (var i = 0; i < count; i++) {
-      var fb = fromBlobs[i % (fromBlobs.length || 1)];
-      var tb = toBlobs[i % (toBlobs.length || 1)];
-      if (!fb || !tb) continue;
-
-      var t = bgBlendProgress;
-      var r = lerp(fb.color.r, tb.color.r, t);
-      var g = lerp(fb.color.g, tb.color.g, t);
-      var b = lerp(fb.color.b, tb.color.b, t);
-
-      // ── Lava lamp vertical cycle ──
-      // cyclePos goes 0→1→0 smoothly (up then down) using a triangle-ish easing
-      var cycleT = ((bgT / tb.cycleLen) + tb.cyclePhase) % 1;
-      // Ease in/out so it lingers at top/bottom like real wax cooling and reheating
-      var eased = 0.5 - 0.5 * Math.cos(cycleT * Math.PI * 2);
-      var riseY = 1.0 - eased * tb.riseRange; // 1 = bottom of travel, (1-riseRange) = top
-
-      // Squash/stretch: stretches vertically while rising fast (mid-cycle), squashes at top/bottom turnarounds
-      var speedFactor = Math.sin(cycleT * Math.PI * 2); // -1..1, peak speed at mid-travel
-      var stretch = 1 + Math.abs(speedFactor) * 0.35;    // taller when moving fast
-      var squash  = 1 - Math.abs(speedFactor) * 0.18;    // narrower when stretched (volume-ish)
-
-      var baseX = lerp(fb.x, tb.x, t);
-      var sway = Math.sin(bgT * tb.swaySpeed + tb.phase) * tb.swayAmp;
-      var px = (baseX + sway) * W;
-      var py = riseY * H;
-
-      var radius = lerp(fb.baseR, tb.baseR, t) * minDim;
-      var radiusX = radius * squash;
-      var radiusY = radius * stretch;
-
-      bgCtx.save();
-      bgCtx.translate(px, py);
-      bgCtx.scale(radiusX / radius, radiusY / radius);
-
-      var grad = bgCtx.createRadialGradient(0, 0, 0, 0, 0, radius);
-      grad.addColorStop(0,   "rgba(" + Math.round(r) + "," + Math.round(g) + "," + Math.round(b) + ",0.9)");
-      grad.addColorStop(0.6, "rgba(" + Math.round(r) + "," + Math.round(g) + "," + Math.round(b) + ",0.35)");
-      grad.addColorStop(1,   "rgba(" + Math.round(r) + "," + Math.round(g) + "," + Math.round(b) + ",0)");
-
-      bgCtx.fillStyle = grad;
-      bgCtx.beginPath();
-      bgCtx.arc(0, 0, radius, 0, Math.PI * 2);
-      bgCtx.fill();
-      bgCtx.restore();
-    }
-
+    bgCtx.imageSmoothingEnabled = true;
+    bgCtx.drawImage(fieldCanvas, 0, 0, FW, FH, 0, 0, W, H);
     bgCtx.restore();
 
-    // Once crossfade completes, promote "to" as the new base and stop animating
-    if (bgBlendProgress >= 1 && bgPaletteTo) {
-      bgBlobs = bgPaletteTo;
-      stopBgAnimation(); // static — no need to keep redrawing every frame
+    drawBgGlitch(W, H);
+  }
+
+  // Periodic glitch bursts on the abstract background
+  var bgGlitchState = { active: false, nextAt: 0 };
+
+  function drawBgGlitch(W, H) {
+    var now = performance.now();
+    if (!bgGlitchState.active && now > bgGlitchState.nextAt) {
+      bgGlitchState.active = true;
+      bgGlitchState.duration = 150 + Math.random() * 250;
+      bgGlitchState.startedAt = now;
+    }
+    if (!bgGlitchState.active) return;
+
+    var elapsed = now - bgGlitchState.startedAt;
+    if (elapsed > bgGlitchState.duration) {
+      bgGlitchState.active = false;
+      bgGlitchState.nextAt = now + 2000 + Math.random() * 5000;
+      return;
+    }
+
+    var sliceCount = 2 + Math.floor(Math.random() * 3);
+    for (var s = 0; s < sliceCount; s++) {
+      var sy = Math.random() * H;
+      var sh = 4 + Math.random() * 24;
+      var ox = (Math.random() - 0.5) * 40;
+      try {
+        var strip = bgCtx.getImageData(0, sy, W, sh);
+        bgCtx.putImageData(strip, ox, sy);
+      } catch (e) { /* canvas may not be readable in rare cases */ }
+    }
+
+    var sweepY = (elapsed / bgGlitchState.duration) * H;
+    var sweepGrad = bgCtx.createLinearGradient(0, sweepY - 40, 0, sweepY + 40);
+    sweepGrad.addColorStop(0, "rgba(255,255,255,0)");
+    sweepGrad.addColorStop(0.5, "rgba(255,255,255,0.06)");
+    sweepGrad.addColorStop(1, "rgba(255,255,255,0)");
+    bgCtx.fillStyle = sweepGrad;
+    bgCtx.fillRect(0, sweepY - 40, W, 80);
+
+    bgCtx.fillStyle = "rgba(255,255,255,0.08)";
+    var noiseCount = 40;
+    for (var n = 0; n < noiseCount; n++) {
+      var nx = Math.random() * W, ny = Math.random() * H;
+      bgCtx.fillRect(nx, ny, 1, 1);
     }
   }
 
   function startBgAnimation() {
-    if (bgRafId) return; // already running
+    if (bgRafId) return;
     function loop() {
       drawBgFrame();
       bgRafId = requestAnimationFrame(loop);

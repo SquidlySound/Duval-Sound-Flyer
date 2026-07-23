@@ -2815,6 +2815,7 @@
   var bgRafId = null;
 
   // Two palette states for crossfading between flyers
+  var bgT = 0;
   var bgPaletteFrom = null;
   var bgPaletteTo   = null;
   var bgBlendProgress = 1; // 1 = fully on "to" palette
@@ -2846,9 +2847,16 @@
       var c = colors[i % colors.length];
       blobs.push({
         color: c,
-        x: Math.random(),
-        y: Math.random(),
-        baseR: 0.28 + Math.random() * 0.22 // relative to min(W,H) — fixed position, no drift
+        x: 0.15 + Math.random() * 0.7,       // horizontal home position
+        baseR: 0.16 + Math.random() * 0.13,  // relative to min(W,H) — lava blobs are smaller/rounder
+        // Vertical rise/fall cycle — travels from near-bottom to near-top and back
+        cycleLen: 14 + Math.random() * 10,   // seconds for one full up-down cycle
+        cyclePhase: Math.random(),           // 0-1 offset so blobs don't move in sync
+        riseRange: 0.55 + Math.random() * 0.25, // how much of the screen height it travels
+        // Gentle horizontal sway while rising, like real wax currents
+        swayAmp: 0.03 + Math.random() * 0.05,
+        swaySpeed: 0.08 + Math.random() * 0.1,
+        phase: Math.random() * Math.PI * 2
       });
     }
     return blobs;
@@ -2880,7 +2888,10 @@
     if (!W || !H) return;
     var minDim = Math.min(W, H);
 
-    // Advance crossfade only — no drift, no pulse, no glitch
+    // Time-based only — never reads scroll position, so blobs stay put regardless of page scroll
+    bgT += 0.008;
+
+    // Advance crossfade
     if (bgBlendProgress < 1) {
       bgBlendProgress = Math.min(1, bgBlendProgress + bgBlendSpeed);
     }
@@ -2907,20 +2918,41 @@
       var g = lerp(fb.color.g, tb.color.g, t);
       var b = lerp(fb.color.b, tb.color.b, t);
 
-      // Fixed position — only color fades, no motion
-      var px = lerp(fb.x, tb.x, t) * W;
-      var py = lerp(fb.y, tb.y, t) * H;
-      var radius = lerp(fb.baseR, tb.baseR, t) * minDim;
+      // ── Lava lamp vertical cycle ──
+      // cyclePos goes 0→1→0 smoothly (up then down) using a triangle-ish easing
+      var cycleT = ((bgT / tb.cycleLen) + tb.cyclePhase) % 1;
+      // Ease in/out so it lingers at top/bottom like real wax cooling and reheating
+      var eased = 0.5 - 0.5 * Math.cos(cycleT * Math.PI * 2);
+      var riseY = 1.0 - eased * tb.riseRange; // 1 = bottom of travel, (1-riseRange) = top
 
-      var grad = bgCtx.createRadialGradient(px, py, 0, px, py, radius);
+      // Squash/stretch: stretches vertically while rising fast (mid-cycle), squashes at top/bottom turnarounds
+      var speedFactor = Math.sin(cycleT * Math.PI * 2); // -1..1, peak speed at mid-travel
+      var stretch = 1 + Math.abs(speedFactor) * 0.35;    // taller when moving fast
+      var squash  = 1 - Math.abs(speedFactor) * 0.18;    // narrower when stretched (volume-ish)
+
+      var baseX = lerp(fb.x, tb.x, t);
+      var sway = Math.sin(bgT * tb.swaySpeed + tb.phase) * tb.swayAmp;
+      var px = (baseX + sway) * W;
+      var py = riseY * H;
+
+      var radius = lerp(fb.baseR, tb.baseR, t) * minDim;
+      var radiusX = radius * squash;
+      var radiusY = radius * stretch;
+
+      bgCtx.save();
+      bgCtx.translate(px, py);
+      bgCtx.scale(radiusX / radius, radiusY / radius);
+
+      var grad = bgCtx.createRadialGradient(0, 0, 0, 0, 0, radius);
       grad.addColorStop(0,   "rgba(" + Math.round(r) + "," + Math.round(g) + "," + Math.round(b) + ",0.9)");
       grad.addColorStop(0.6, "rgba(" + Math.round(r) + "," + Math.round(g) + "," + Math.round(b) + ",0.35)");
       grad.addColorStop(1,   "rgba(" + Math.round(r) + "," + Math.round(g) + "," + Math.round(b) + ",0)");
 
       bgCtx.fillStyle = grad;
       bgCtx.beginPath();
-      bgCtx.arc(px, py, radius, 0, Math.PI * 2);
+      bgCtx.arc(0, 0, radius, 0, Math.PI * 2);
       bgCtx.fill();
+      bgCtx.restore();
     }
 
     bgCtx.restore();

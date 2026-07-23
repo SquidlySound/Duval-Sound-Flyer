@@ -140,7 +140,9 @@
     overflow-y: auto; overflow-x: hidden;
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
     perspective: 1200px;
+    will-change: scroll-position;
   }
   #flyer-screen {
     --theme-primary: #f5f0e8;
@@ -565,11 +567,13 @@
     padding: 5.5rem 1rem 3rem;
     min-height: 100vh;
     scroll-snap-align: start;
+    scroll-snap-stop: normal;
     box-sizing: border-box;
     width: 100%;
   }
   #tab-flyers {
-    scroll-snap-type: y mandatory;
+    scroll-snap-type: y proximity;
+    scroll-behavior: smooth;
   }
   .flyer-section .flyer-container {
     width: 100%;
@@ -2808,7 +2812,6 @@
   // crossfading smoothly between flyers as you scroll. Glitch bursts
   // (RGB slice, scanline sweep, static noise) layer on top periodically.
   var bgCanvas = null, bgCtx = null;
-  var bgT = 0;
   var bgRafId = null;
 
   // Two palette states for crossfading between flyers
@@ -2826,6 +2829,7 @@
     bgCtx = bgCanvas.getContext("2d");
     resizeBgCanvas();
     window.addEventListener("resize", resizeBgCanvas);
+    startBgAnimation(); // runs continuously for the glitch overlay
   }
 
   function resizeBgCanvas() {
@@ -2844,11 +2848,7 @@
         color: c,
         x: Math.random(),
         y: Math.random(),
-        baseR: 0.28 + Math.random() * 0.22, // relative to min(W,H)
-        speedX: (Math.random() - 0.5) * 0.00035,
-        speedY: (Math.random() - 0.5) * 0.00035,
-        phase: Math.random() * Math.PI * 2,
-        pulseSpeed: 0.3 + Math.random() * 0.4
+        baseR: 0.28 + Math.random() * 0.22 // relative to min(W,H) — fixed position, no drift
       });
     }
     return blobs;
@@ -2880,9 +2880,7 @@
     if (!W || !H) return;
     var minDim = Math.min(W, H);
 
-    bgT += 0.008;
-
-    // Advance crossfade
+    // Advance crossfade only — no drift, no pulse, no glitch
     if (bgBlendProgress < 1) {
       bgBlendProgress = Math.min(1, bgBlendProgress + bgBlendSpeed);
     }
@@ -2909,14 +2907,10 @@
       var g = lerp(fb.color.g, tb.color.g, t);
       var b = lerp(fb.color.b, tb.color.b, t);
 
-      // Drift position using the "to" blob's motion (from fades out visually via color blend)
-      var driftX = tb.x + Math.sin(bgT * 0.4 + tb.phase) * tb.speedX * 300;
-      var driftY = tb.y + Math.cos(bgT * 0.35 + tb.phase) * tb.speedY * 300;
-      var px = lerp(fb.x, driftX, t) * W;
-      var py = lerp(fb.y, driftY, t) * H;
-
-      var pulse = 1 + Math.sin(bgT * tb.pulseSpeed + tb.phase) * 0.15;
-      var radius = lerp(fb.baseR, tb.baseR, t) * minDim * pulse;
+      // Fixed position — only color fades, no motion
+      var px = lerp(fb.x, tb.x, t) * W;
+      var py = lerp(fb.y, tb.y, t) * H;
+      var radius = lerp(fb.baseR, tb.baseR, t) * minDim;
 
       var grad = bgCtx.createRadialGradient(px, py, 0, px, py, radius);
       grad.addColorStop(0,   "rgba(" + Math.round(r) + "," + Math.round(g) + "," + Math.round(b) + ",0.9)");
@@ -2931,62 +2925,10 @@
 
     bgCtx.restore();
 
-    // Once crossfade completes, promote "to" as the new base
+    // Once crossfade completes, promote "to" as the new base and stop animating
     if (bgBlendProgress >= 1 && bgPaletteTo) {
       bgBlobs = bgPaletteTo;
-    }
-
-    // ── Glitch overlay layer ──
-    drawBgGlitch(W, H);
-  }
-
-  // Periodic glitch bursts on the abstract background
-  var bgGlitchState = { active: false, nextAt: 0, phase: 0 };
-
-  function drawBgGlitch(W, H) {
-    var now = performance.now();
-    if (!bgGlitchState.active && now > bgGlitchState.nextAt) {
-      bgGlitchState.active = true;
-      bgGlitchState.phase = 0;
-      bgGlitchState.duration = 150 + Math.random() * 250;
-      bgGlitchState.startedAt = now;
-    }
-    if (!bgGlitchState.active) return;
-
-    var elapsed = now - bgGlitchState.startedAt;
-    if (elapsed > bgGlitchState.duration) {
-      bgGlitchState.active = false;
-      bgGlitchState.nextAt = now + 2000 + Math.random() * 5000;
-      return;
-    }
-
-    // RGB slice — grab horizontal strips and offset them
-    var sliceCount = 2 + Math.floor(Math.random() * 3);
-    for (var s = 0; s < sliceCount; s++) {
-      var sy = Math.random() * H;
-      var sh = 4 + Math.random() * 24;
-      var ox = (Math.random() - 0.5) * 40;
-      try {
-        var strip = bgCtx.getImageData(0, sy, W, sh);
-        bgCtx.putImageData(strip, ox, sy);
-      } catch (e) { /* canvas may not be readable cross-origin in rare cases */ }
-    }
-
-    // Faint scanline sweep
-    var sweepY = (elapsed / bgGlitchState.duration) * H;
-    var sweepGrad = bgCtx.createLinearGradient(0, sweepY - 40, 0, sweepY + 40);
-    sweepGrad.addColorStop(0, "rgba(255,255,255,0)");
-    sweepGrad.addColorStop(0.5, "rgba(255,255,255,0.06)");
-    sweepGrad.addColorStop(1, "rgba(255,255,255,0)");
-    bgCtx.fillStyle = sweepGrad;
-    bgCtx.fillRect(0, sweepY - 40, W, 80);
-
-    // Sparse static noise dots
-    bgCtx.fillStyle = "rgba(255,255,255,0.08)";
-    var noiseCount = 40;
-    for (var n = 0; n < noiseCount; n++) {
-      var nx = Math.random() * W, ny = Math.random() * H;
-      bgCtx.fillRect(nx, ny, 1, 1);
+      stopBgAnimation(); // static — no need to keep redrawing every frame
     }
   }
 
@@ -3024,13 +2966,12 @@
 
     // Reset scroll position — #flyer-screen is the scrollable container
     var scrollContainer = document.getElementById("flyer-screen");
-    if (scrollContainer) scrollContainer.scrollTop = 0;
+    if (scrollContainer) scrollContainer.scrollTo({ top: 0, behavior: "auto" });
 
     // Show/hide the flyer background layers — only visible on the Flyers tab
     var showBg = (tabName === "flyers");
     var bgLayers = [
       document.getElementById("flyer-bg"),
-      document.getElementById("flyer-mirror"),
       document.getElementById("flyer-mesh"),
       document.getElementById("skyline-canvas"),
       document.getElementById("flyer-vcr")

@@ -169,8 +169,6 @@
   #flyer-bg-img {
     display: none; /* hidden — used only as image source for canvas */
   }
-  #flyer-mirror { position:fixed; inset:0; z-index:1; pointer-events:none; overflow:hidden; opacity:0.18; }
-  .mirror-tile { position:absolute; filter:blur(2px) brightness(0.5) saturate(0.3); }
   #skyline-canvas { position:fixed; inset:0; width:100%; height:100%; pointer-events:none; z-index:2; opacity:0; transition:opacity 1.8s; }
   #flyer-vcr { position:fixed; inset:0; width:100%; height:100%; pointer-events:none; z-index:3; opacity:0; }
   .flyer-scanlines { position:fixed; inset:0; background:repeating-linear-gradient(to bottom,transparent 0px,transparent 3px,rgba(0,0,0,0.12) 3px,rgba(0,0,0,0.12) 4px); pointer-events:none; z-index:3; }
@@ -1010,7 +1008,6 @@
     <canvas id="flyer-bg-canvas"></canvas>
     <img id="flyer-bg-img" alt="" crossorigin="anonymous">
   </div>
-  <div id="flyer-mirror"></div>
   <canvas id="flyer-mesh" style="position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:1;opacity:0;transition:opacity 1.4s;mix-blend-mode:color-dodge;"></canvas>
   <canvas id="skyline-canvas"></canvas>
   <canvas id="flyer-vcr"></canvas>
@@ -1424,7 +1421,6 @@
       }
     }
     loadMessageForFlyer(idx);
-    try { buildMirrorBg(); } catch(e) {}
   }
 
   function initScrollObserver() {
@@ -1763,7 +1759,6 @@
       } else if (data.role === "user") {
         recordEvent("unlock");
         document.getElementById("lock-screen").classList.add("fade-out");
-        try { buildMirrorBg(); } catch(e) {}
         setTimeout(function() {
           document.getElementById("lock-screen").style.display = "none";
           document.getElementById("flyer-screen").style.display = "flex";
@@ -2055,29 +2050,6 @@
 
   // ── FLYER UPLOAD ──────────────────────────────────────────
 
-  // ── MIRROR BG ────────────────────────────────────────────
-  function buildMirrorBg() {
-    const container = document.getElementById("flyer-mirror");
-    const W = window.innerWidth, H = window.innerHeight;
-    const tileW = Math.floor(W / 2), tileH = Math.floor(H / 2);
-    container.innerHTML = "";
-    const cols = Math.ceil(W / tileW) + 1, rows = Math.ceil(H / tileH) + 1;
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        const img = document.createElement("img");
-        img.src = currentFlyerSrc;
-        img.className = "mirror-tile";
-        img.style.width  = tileW + "px";
-        img.style.height = tileH + "px";
-        img.style.objectFit = "cover";
-        img.style.left = (c * tileW) + "px";
-        img.style.top  = (r * tileH) + "px";
-        img.style.transform = "scaleX(" + (c%2===1?-1:1) + ") scaleY(" + (r%2===1?-1:1) + ")";
-        container.appendChild(img);
-      }
-    }
-  }
-
   // ── VCR GLITCH SHARED ────────────────────────────────────
   function drawVCRStatic(ctx, w, h, intensity) {
     const imageData = ctx.createImageData(w, h);
@@ -2143,7 +2115,7 @@
   const flyerCanvas = document.getElementById("flyer-vcr");
   const flyerCtx = flyerCanvas.getContext("2d");
   function resizeFlyerCanvas(){ flyerCanvas.width=window.innerWidth; flyerCanvas.height=window.innerHeight; }
-  resizeFlyerCanvas(); window.addEventListener("resize", function(){ resizeFlyerCanvas(); buildMirrorBg(); });
+  resizeFlyerCanvas(); window.addEventListener("resize", function(){ resizeFlyerCanvas(); });
 
   const fbar1 = document.getElementById("fbar1");
   const fbar2 = document.getElementById("fbar2");

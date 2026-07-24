@@ -441,42 +441,21 @@
     50%       { opacity: 0; }
   }
 
-  /* Message carousel */
-  .console-carousel {
-    position: relative;
-    width: 100%;
-    overflow: hidden;
-    min-height: 2.5rem;
-  }
-  .console-carousel-inner {
+  /* Fixed-height typewriter console box — never resizes as messages cycle */
+  .console-fixed-box {
     display: flex;
     flex-direction: column;
-    align-items: center;
     width: 100%;
   }
-  .console-slide {
-    width: 100%;
-    display: none;
+  .console-lines-inner {
+    display: flex;
     flex-direction: column;
     align-items: flex-start;
-    animation: slide-in 0.5s ease both;
+    justify-content: flex-start;
+    width: 100%;
+    overflow: hidden; /* height is locked via inline style — content never overflows visibly */
   }
-  .console-slide.active {
-    display: flex;
-  }
-  @keyframes slide-in {
-    from { opacity: 0; transform: translateY(10px); }
-    to   { opacity: 1; transform: translateY(0); }
-  }
-  @keyframes slide-out {
-    from { opacity: 1; transform: translateY(0); }
-    to   { opacity: 0; transform: translateY(-10px); }
-  }
-  .console-slide.leaving {
-    display: flex;
-    animation: slide-out 0.4s ease both;
-  }
-  /* Carousel dots */
+  /* Carousel dots — indicate position among multiple admin messages */
   .carousel-dots {
     display: flex;
     gap: 0.4rem;
@@ -489,7 +468,6 @@
     background: var(--console-accent, #888);
     opacity: 0.3;
     transition: opacity 0.3s;
-    cursor: pointer;
   }
   .carousel-dot.active { opacity: 1; }
   /* Admin message textarea */
@@ -2580,7 +2558,6 @@
   function renderConsoleMessageForFlyer(messages, idx) {
     var wrap = document.getElementById("console-wrap-" + idx);
     if (!wrap) return;
-    wrap.innerHTML = "";
 
     var entries = [];
     if (Array.isArray(messages)) {
@@ -2589,117 +2566,182 @@
       entries = [{ name: null, message: messages }];
     }
 
-    if (!entries.length) { wrap.style.display = "none"; return; }
-    wrap.style.display = "block";
-
-    // Build carousel if multiple messages, else single display
-    if (entries.length === 1) {
-      // Single message — original line-by-line animation
-      var inner = document.createElement("div");
-      inner.className = "console-carousel-inner";
-      buildConsoleSlide(entries[0], inner, true);
-      wrap.appendChild(inner);
-    } else {
-      // Multiple messages — carousel
-      var carousel = document.createElement("div");
-      carousel.className = "console-carousel";
-      var inner = document.createElement("div");
-      inner.className = "console-carousel-inner";
-
-      entries.forEach(function(entry, ei) {
-        var slide = document.createElement("div");
-        slide.className = "console-slide" + (ei === 0 ? " active" : "");
-        buildConsoleSlide(entry, slide, ei === 0);
-        inner.appendChild(slide);
-      });
-      carousel.appendChild(inner);
-
-      // Dots
-      if (entries.length > 1) {
-        var dots = document.createElement("div");
-        dots.className = "carousel-dots";
-        entries.forEach(function(_, di) {
-          var dot = document.createElement("div");
-          dot.className = "carousel-dot" + (di === 0 ? " active" : "");
-          dot.onclick = (function(index) { return function() { carouselGoTo(carousel, index); }; })(di);
-          dots.appendChild(dot);
-        });
-        carousel.appendChild(dots);
-      }
-
-      wrap.appendChild(carousel);
-
-      // Auto-advance every 5 seconds
-      startCarouselAuto(carousel, entries.length);
+    // Stop any previous typewriter cycle running for this box
+    if (consoleCycles[idx]) {
+      clearTimeout(consoleCycles[idx].timer);
+      delete consoleCycles[idx];
     }
+
+    if (!entries.length) {
+      wrap.style.display = "none";
+      wrap.innerHTML = "";
+      return;
+    }
+
+    wrap.style.display = "block";
+    wrap.innerHTML =
+      "<div class='console-fixed-box'>" +
+        "<div class='console-lines-inner' id='console-lines-inner-" + idx + "'></div>" +
+        (entries.length > 1
+          ? "<div class='carousel-dots' id='console-dots-" + idx + "'></div>"
+          : "") +
+      "</div>";
+
+    // Build dot indicators up front
+    if (entries.length > 1) {
+      var dotsEl = document.getElementById("console-dots-" + idx);
+      entries.forEach(function(_, di) {
+        var dot = document.createElement("div");
+        dot.className = "carousel-dot" + (di === 0 ? " active" : "");
+        dotsEl.appendChild(dot);
+      });
+    }
+
+    // Pre-measure the tallest message so the box height never changes as messages cycle
+    lockConsoleBoxHeight(wrap, entries, idx);
+
+    // Start the type-in / hold / type-out cycle
+    startConsoleCycle(idx, entries, 0);
   }
 
-  function buildConsoleSlide(entry, container, animate) {
+  // Measure every message's rendered height at full content, then pin the
+  // box to the tallest one so switching messages never resizes the container.
+  function lockConsoleBoxHeight(wrap, entries, idx) {
+    var box = wrap.querySelector(".console-fixed-box");
+    var linesInner = document.getElementById("console-lines-inner-" + idx);
+    var maxHeight = 0;
+
+    entries.forEach(function(entry) {
+      linesInner.innerHTML = buildFullConsoleHTML(entry);
+      var h = linesInner.scrollHeight;
+      if (h > maxHeight) maxHeight = h;
+    });
+
+    linesInner.innerHTML = "";
+    linesInner.style.height = maxHeight + "px";
+  }
+
+  function buildFullConsoleHTML(entry) {
+    var html = "";
     if (entry.name) {
-      var nameEl = document.createElement("div");
-      nameEl.className = "console-line" + (animate ? "" : " visible");
-      nameEl.style.width = "100%";
-      var namePrompt = document.createElement("span");
-      namePrompt.className = "console-prompt";
-      namePrompt.textContent = "//";
-      var nameText = document.createElement("span");
-      nameText.textContent = " " + entry.name;
-      nameText.style.cssText = "opacity:0.6;font-size:0.8em;letter-spacing:0.2em;";
-      nameEl.appendChild(namePrompt);
-      nameEl.appendChild(nameText);
-      container.appendChild(nameEl);
-      if (animate) setTimeout(function() { nameEl.classList.add("visible"); }, 300);
+      html += "<div class='console-line visible'><span class='console-prompt'>//</span><span style='opacity:0.6;font-size:0.8em;letter-spacing:0.2em;'> " + entry.name + "</span></div>";
     }
     var lines = entry.message.split("\n").filter(function(l) { return l.trim(); });
-    lines.forEach(function(line, li) {
-      var lineEl = document.createElement("div");
-      lineEl.className = "console-line" + (animate ? "" : " visible");
-      lineEl.style.width = "100%";
-      var prompt = document.createElement("span");
-      prompt.className = "console-prompt";
-      prompt.textContent = ">";
-      var textNode = document.createElement("span");
-      textNode.textContent = " " + line;
-      lineEl.appendChild(prompt);
-      lineEl.appendChild(textNode);
-      if (li === lines.length - 1) {
-        var cursor = document.createElement("span");
-        cursor.className = "console-cursor";
-        lineEl.appendChild(cursor);
-      }
-      container.appendChild(lineEl);
-      if (animate) {
-        var delay = (entry.name ? 600 : 300) + li * 500;
-        setTimeout(function(el) { el.classList.add("visible"); }, delay, lineEl);
-      }
+    lines.forEach(function(line) {
+      html += "<div class='console-line visible'><span class='console-prompt'>&gt;</span><span> " + line + "</span></div>";
+    });
+    return html;
+  }
+
+  // Tracks the active typewriter cycle per console box (keyed by flyer idx)
+  var consoleCycles = {};
+
+  function startConsoleCycle(idx, entries, entryIndex) {
+    var linesInner = document.getElementById("console-lines-inner-" + idx);
+    if (!linesInner) return;
+
+    var entry = entries[entryIndex % entries.length];
+    var dotsEl = document.getElementById("console-dots-" + idx);
+    if (dotsEl) {
+      Array.prototype.forEach.call(dotsEl.children, function(d, di) {
+        d.classList.toggle("active", di === (entryIndex % entries.length));
+      });
+    }
+
+    typeInMessage(linesInner, entry, function() {
+      // Hold fully typed for a few seconds before erasing (skip hold if only one message)
+      var holdTime = entries.length > 1 ? 3200 : 999999999;
+      var timer = setTimeout(function() {
+        if (entries.length > 1) {
+          typeOutMessage(linesInner, function() {
+            var nextTimer = setTimeout(function() {
+              startConsoleCycle(idx, entries, entryIndex + 1);
+            }, 250);
+            consoleCycles[idx] = { timer: nextTimer };
+          });
+        }
+      }, holdTime);
+      consoleCycles[idx] = { timer: timer };
     });
   }
 
-  function startCarouselAuto(carousel, count) {
-    var id = setInterval(function() {
-      var current = carousel.querySelector(".console-slide.active");
-      if (!current) return;
-      var slides = carousel.querySelectorAll(".console-slide");
-      var currentIdx = Array.prototype.indexOf.call(slides, current);
-      var nextIdx = (currentIdx + 1) % count;
-      carouselGoTo(carousel, nextIdx);
-    }, 5000);
-    // Store to clear on screen change
-    carousel._timerId = id;
+  // Types out a message's lines one at a time, each line appearing whole
+  // (matching the site's existing console-line style) with a blinking
+  // cursor riding at the end of the currently-typing line.
+  function typeInMessage(container, entry, onComplete) {
+    container.innerHTML = "";
+    var htmlLines = [];
+    if (entry.name) {
+      htmlLines.push({ prompt: "//", text: " " + entry.name, isName: true });
+    }
+    entry.message.split("\n").filter(function(l){ return l.trim(); }).forEach(function(line) {
+      htmlLines.push({ prompt: ">", text: " " + line, isName: false });
+    });
+
+    var i = 0;
+    function nextLine() {
+      if (i >= htmlLines.length) { if (onComplete) onComplete(); return; }
+      var ld = htmlLines[i];
+      var lineEl = document.createElement("div");
+      lineEl.className = "console-line visible";
+      var prompt = document.createElement("span");
+      prompt.className = "console-prompt";
+      prompt.textContent = ld.prompt;
+      var textNode = document.createElement("span");
+      if (ld.isName) textNode.style.cssText = "opacity:0.6;font-size:0.8em;letter-spacing:0.2em;";
+      var cursor = document.createElement("span");
+      cursor.className = "console-cursor";
+
+      lineEl.appendChild(prompt);
+      lineEl.appendChild(textNode);
+      lineEl.appendChild(cursor);
+      container.appendChild(lineEl);
+
+      // Type the text character by character
+      var chars = ld.text.split("");
+      var ci = 0;
+      var typeSpeed = 18;
+      (function typeChar() {
+        if (ci < chars.length) {
+          textNode.textContent += chars[ci];
+          ci++;
+          var timer = setTimeout(typeChar, typeSpeed);
+        } else {
+          cursor.remove(); // move cursor to next line only
+          i++;
+          var timer2 = setTimeout(nextLine, 120);
+        }
+      })();
+    }
+    nextLine();
   }
 
-  function carouselGoTo(carousel, nextIdx) {
-    var slides = carousel.querySelectorAll(".console-slide");
-    var dots   = carousel.querySelectorAll(".carousel-dot");
-    var current = carousel.querySelector(".console-slide.active");
-    if (!current) return;
-    var currentIdx = Array.prototype.indexOf.call(slides, current);
-    if (currentIdx === nextIdx) return;
-    current.classList.remove("active");
-    current.classList.add("leaving");
-    setTimeout(function() { current.classList.remove("leaving"); }, 400);
-    slides[nextIdx].classList.add("active");
-    dots.forEach(function(d, di) { d.classList.toggle("active", di === nextIdx); });
+  // Reverses the typing — erases from the LAST line backward, character by
+  // character, mirroring how it typed in, so it feels like the console is
+  // "un-writing" itself before the next message begins.
+  function typeOutMessage(container, onComplete) {
+    var lineEls = Array.prototype.slice.call(container.children).reverse();
+    var li = 0;
+    function eraseLine() {
+      if (li >= lineEls.length) { if (onComplete) onComplete(); return; }
+      var lineEl = lineEls[li];
+      var textSpan = lineEl.querySelectorAll("span")[1];
+      if (!textSpan) { li++; eraseLine(); return; }
+      var text = textSpan.textContent;
+      var eraseSpeed = 10;
+      (function eraseChar() {
+        if (text.length > 0) {
+          text = text.slice(0, -1);
+          textSpan.textContent = text;
+          setTimeout(eraseChar, eraseSpeed);
+        } else {
+          lineEl.remove();
+          li++;
+          setTimeout(eraseLine, 60);
+        }
+      })();
+    }
+    eraseLine();
   }
 
   function loadAdminMessageForFlyer() {

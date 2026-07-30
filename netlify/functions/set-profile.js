@@ -12,6 +12,18 @@ const { getStore } = require("@netlify/blobs");
 
 const PHOTO_STORE = "member-photos";
 
+// Netlify Blobs sometimes fails to auto-configure inside Functions, throwing
+// MissingBlobsEnvironmentError. Passing siteID + token explicitly is the
+// documented fix. Falls back to auto-config if those vars aren't set.
+function openStore(name) {
+  const siteID = process.env.NETLIFY_SITE_ID || process.env.SITE_ID;
+  const token  = process.env.NETLIFY_API_KEY || process.env.NETLIFY_AUTH_TOKEN;
+  if (siteID && token) {
+    return getStore({ name: name, siteID: siteID, token: token });
+  }
+  return getStore(name);
+}
+
 async function getSheets() {
   const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
   const auth = new google.auth.GoogleAuth({
@@ -32,7 +44,7 @@ async function uploadPhotoToBlobs(adminKey, base64DataUrl) {
   const contentType = "image/" + (ext === "jpg" ? "jpeg" : ext);
   const buffer = Buffer.from(match[2], "base64");
 
-  const store = getStore(PHOTO_STORE);
+  const store = openStore(PHOTO_STORE);
   await store.set(adminKey, buffer, {
     metadata: {
       contentType: contentType,

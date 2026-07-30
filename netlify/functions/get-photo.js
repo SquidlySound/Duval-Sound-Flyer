@@ -11,6 +11,18 @@ const { getStore } = require("@netlify/blobs");
 
 const PHOTO_STORE = "member-photos";
 
+// Netlify Blobs sometimes fails to auto-configure inside Functions, throwing
+// MissingBlobsEnvironmentError. Passing siteID + token explicitly is the
+// documented fix. Falls back to auto-config if those vars aren't set.
+function openStore(name) {
+  const siteID = process.env.NETLIFY_SITE_ID || process.env.SITE_ID;
+  const token  = process.env.NETLIFY_API_KEY || process.env.NETLIFY_AUTH_TOKEN;
+  if (siteID && token) {
+    return getStore({ name: name, siteID: siteID, token: token });
+  }
+  return getStore(name);
+}
+
 // 1x1 transparent PNG — served when an admin has no photo yet, so the
 // <img> tag fails gracefully instead of showing a broken-image icon.
 const BLANK_PNG_BASE64 =
@@ -25,7 +37,7 @@ exports.handler = async function(event) {
   }
 
   try {
-    const store = getStore(PHOTO_STORE);
+    const store = openStore(PHOTO_STORE);
     const result = await store.getWithMetadata(adminKey, { type: "arrayBuffer" });
 
     if (!result || !result.data) {

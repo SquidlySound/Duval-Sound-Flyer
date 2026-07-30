@@ -944,6 +944,53 @@
   }
   .member-social-link:hover { border-color: var(--white); color: var(--white); }
 
+
+  /* Archive flyer control */
+  .archive-row {
+    margin-top: 1.6rem;
+    padding-top: 1.2rem;
+    border-top: 1px solid #222;
+  }
+  .archive-note {
+    font-size: 0.58rem;
+    letter-spacing: 0.08em;
+    color: #555;
+    line-height: 1.7;
+    margin-bottom: 0.7rem;
+  }
+  .archive-btn {
+    width: 100%;
+    background: transparent;
+    border: 1px solid #6a2b2b;
+    color: #c96a6a;
+    font-family: 'Space Mono', 'Courier New', monospace;
+    font-size: 0.62rem;
+    letter-spacing: 0.18em;
+    padding: 0.65rem;
+    cursor: pointer;
+    transition: border-color 0.2s, color 0.2s, background 0.2s;
+  }
+  .archive-btn:hover:not(:disabled) {
+    border-color: #e63329;
+    color: #e63329;
+    background: rgba(230,51,41,0.06);
+  }
+  .archive-btn:disabled { opacity: 0.5; cursor: default; }
+  .archive-btn.confirming {
+    border-color: #e63329;
+    color: #fff;
+    background: rgba(230,51,41,0.22);
+  }
+  #archive-status {
+    font-size: 0.6rem;
+    letter-spacing: 0.1em;
+    text-align: center;
+    margin-top: 0.6rem;
+    display: none;
+  }
+  #archive-status.ok  { color: #2ecc71; display: block; }
+  #archive-status.err { color: #e63329; display: block; }
+
 </style>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
 </head>
@@ -1192,6 +1239,12 @@
       <button class="msg-save-btn" onclick="clearMessage()" style="flex:1;background:transparent;color:var(--white);border:1px solid #444;font-size:0.9rem;">CLEAR</button>
     </div>
     <div id="msg-status"></div>
+
+    <div class="archive-row">
+      <div class="archive-note">Event over? Move this flyer to Past Shows. This deletes its message tab from the sheet.</div>
+      <button class="archive-btn" onclick="archiveFlyer()" id="archive-btn">&#8615; ARCHIVE THIS FLYER</button>
+      <div id="archive-status"></div>
+    </div>
   </div>
 
   <div class="admin-footer fade-in">
@@ -2549,7 +2602,8 @@
       renderConsoleMessageForFlyer(messageCache[key], idx);
       return;
     }
-    fetch("/.netlify/functions/get-message?flyer=" + (idx + 1))
+    var flyerFile = (FLYERS[idx] || "").replace("flyers/", "");
+    fetch("/.netlify/functions/get-message?flyer=" + encodeURIComponent(flyerFile))
       .then(function(r) { return r.json(); })
       .then(function(data) {
         if (data && data.messages !== undefined) {
@@ -2750,6 +2804,7 @@
   }
 
   function loadAdminMessageForFlyer() {
+    resetArchiveBtn();
     // Populate flyer selector if empty
     var sel = document.getElementById("msg-flyer-select");
     if (sel && sel.options.length === 0 && FLYERS.length > 0) {
@@ -2764,7 +2819,9 @@
     var flyerNum = sel ? parseInt(sel.value, 10) : 1;
     var selectedSrc = FLYERS[flyerNum - 1] || FLYERS[0];
     if (selectedSrc) updateAdminPreview(selectedSrc);
-    fetch("/.netlify/functions/get-message?flyer=" + flyerNum + "&admin=" + encodeURIComponent(currentAdminPassword))
+    var flyerFile = (selectedSrc || "").replace("flyers/", "");
+    fetch("/.netlify/functions/get-message?flyer=" + encodeURIComponent(flyerFile) +
+          "&admin=" + encodeURIComponent(currentAdminPassword))
       .then(function(r) { return r.json(); })
       .then(function(data) {
         var ta = document.getElementById("msg-textarea");
@@ -2795,7 +2852,11 @@
     fetch("/.netlify/functions/set-message", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: text, flyer: flyerNum, password: currentAdminPassword })
+      body: JSON.stringify({
+        message: text,
+        flyer: (FLYERS[flyerNum - 1] || "").replace("flyers/", ""),
+        password: currentAdminPassword
+      })
     })
     .then(function(r) { return r.json(); })
     .then(function(data) {
@@ -2830,7 +2891,11 @@
     fetch("/.netlify/functions/set-message", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: "", flyer: flyerNum, password: currentAdminPassword })
+      body: JSON.stringify({
+        message: "",
+        flyer: (FLYERS[flyerNum - 1] || "").replace("flyers/", ""),
+        password: currentAdminPassword
+      })
     })
     .then(function(r) { return r.json(); })
     .then(function(data) {
@@ -2855,6 +2920,96 @@
       statusEl.className = "err";
       statusEl.style.display = "block";
     });
+  }
+
+  // ── ARCHIVE FLYER ───────────────────────────────────────────
+  // Two-step: first tap arms the button, second tap commits. Guards against
+  // archiving a live flyer by mistake, which would take a git revert to undo.
+  var archiveArmed = false;
+  var archiveArmTimer = null;
+
+  function archiveFlyer() {
+    var sel = document.getElementById("msg-flyer-select");
+    var btn = document.getElementById("archive-btn");
+    var statusEl = document.getElementById("archive-status");
+    if (!sel || !btn) return;
+
+    var flyerNum = parseInt(sel.value, 10) || 1;
+    var src = FLYERS[flyerNum - 1];
+    if (!src) {
+      statusEl.textContent = "No flyer selected";
+      statusEl.className = "err";
+      return;
+    }
+    var bare = src.replace("flyers/", "");
+
+    // First tap — arm it
+    if (!archiveArmed) {
+      archiveArmed = true;
+      btn.classList.add("confirming");
+      btn.textContent = "TAP AGAIN TO ARCHIVE " + bare.toUpperCase();
+      clearTimeout(archiveArmTimer);
+      archiveArmTimer = setTimeout(resetArchiveBtn, 5000);
+      return;
+    }
+
+    // Second tap — do it
+    clearTimeout(archiveArmTimer);
+    archiveArmed = false;
+    btn.classList.remove("confirming");
+    btn.textContent = "ARCHIVING...";
+    btn.disabled = true;
+    statusEl.style.display = "none";
+
+    fetch("/.netlify/functions/archive-flyer", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ flyer: bare, password: currentAdminPassword })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      btn.disabled = false;
+      if (data.success) {
+        statusEl.innerHTML = "&#10003; Archived — site rebuilds in ~1 min";
+        statusEl.className = "ok";
+        // Drop it locally so the dropdown reflects reality immediately,
+        // even though the deploy hasn't finished yet
+        FLYERS = FLYERS.filter(function(f) { return f !== src; });
+        sel.innerHTML = "";
+        FLYERS.forEach(function(f, i) {
+          var opt = document.createElement("option");
+          opt.value = i + 1;
+          opt.textContent = f.replace("flyers/", "");
+          sel.appendChild(opt);
+        });
+        if (FLYERS.length) {
+          loadAdminMessageForFlyer();
+        } else {
+          document.getElementById("msg-textarea").value = "";
+          updateAdminPreview(null);
+        }
+        resetArchiveBtn();
+      } else {
+        statusEl.textContent = "\u2717 " + (data.error || "Archive failed");
+        statusEl.className = "err";
+        resetArchiveBtn();
+      }
+    })
+    .catch(function() {
+      btn.disabled = false;
+      statusEl.textContent = "\u2717 Connection error";
+      statusEl.className = "err";
+      resetArchiveBtn();
+    });
+  }
+
+  function resetArchiveBtn() {
+    var btn = document.getElementById("archive-btn");
+    if (!btn) return;
+    archiveArmed = false;
+    btn.classList.remove("confirming");
+    btn.disabled = false;
+    btn.innerHTML = "&#8615; ARCHIVE THIS FLYER";
   }
 
   function updateMsgCount() {

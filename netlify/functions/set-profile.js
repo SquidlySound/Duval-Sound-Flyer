@@ -1,16 +1,16 @@
 // netlify/functions/set-profile.js
-// Saves an admin's profile (bio, socials, track link) to Google Sheets.
-// If a photo is included, uploads it to the GitHub repo under member-photos/
-// and stores the resulting raw URL in the sheet.
+// Saves an admin's profile to Google Sheets (bio, socials, track link).
+// Profile photos are stored in Netlify Blobs — no GitHub commits, no rebuilds,
+// no filename issues, and the photo is live the instant the write succeeds.
 //
-// Requires these Netlify env vars for photo upload:
-//   GITHUB_TOKEN        - personal access token with repo write access
-//   GITHUB_REPO_OWNER    - e.g. "SquidlySound"
-//   GITHUB_REPO_NAME     - e.g. "Duval-Sound-Flyer"
-//
-// If those aren't set, profile text still saves — photo upload is skipped gracefully.
+// Photos are keyed by the admin's password (lowercased), e.g. "squidlysound".
+// The Sheets photoUrl column stores a link to the get-photo function, which
+// streams the image back out of Blobs.
 
 const { google } = require("googleapis");
+const { getStore } = require("@netlify/blobs");
+
+const PHOTO_STORE = "member-photos";
 
 async function getSheets() {
   const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
@@ -21,66 +21,31 @@ async function getSheets() {
   return google.sheets({ version: "v4", auth });
 }
 
-async function uploadPhotoToGitHub(adminKey, base64DataUrl) {
-  const token = process.env.GITHUB_TOKEN;
-  const owner = process.env.GITHUB_REPO_OWNER;
-  const repo  = process.env.GITHUB_REPO_NAME;
-
-  if (!token || !owner || !repo) {
-    console.warn("GitHub photo upload skipped — missing env vars");
-    return null;
-  }
-
-  // Parse the data URL: data:image/png;base64,xxxxx
+// Stores the image bytes in Netlify Blobs and returns the public URL
+// that will serve it back (via the get-photo function).
+async function uploadPhotoToBlobs(adminKey, base64DataUrl) {
   const match = base64DataUrl.match(/^data:image\/(\w+);base64,(.+)$/);
-  if (!match) return null;
-  const ext = match[1] === "jpeg" ? "jpg" : match[1];
-  const base64Content = match[2];
+  if (!match) throw new Error("Invalid image data format");
 
-  const filePath = `member-photos/${adminKey}.${ext}`;
-  const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${filePath}`;
+  const rawExt = match[1].toLowerCase();
+  const ext = rawExt === "jpeg" ? "jpg" : rawExt;
+  const contentType = "image/" + (ext === "jpg" ? "jpeg" : ext);
+  const buffer = Buffer.from(match[2], "base64");
 
-  // Check if file already exists (need its sha to update)
-  let sha = null;
-  try {
-    const existing = await fetch(apiUrl, {
-      headers: {
-        "Authorization": `Bearer ${token}`,
-        "Accept": "application/vnd.github+json",
-      },
-    });
-    if (existing.ok) {
-      const existingData = await existing.json();
-      sha = existingData.sha;
-    }
-  } catch (e) {
-    // File doesn't exist yet — that's fine
-  }
-
-  const body = {
-    message: `Update profile photo for ${adminKey}`,
-    content: base64Content,
-    branch: "main",
-  };
-  if (sha) body.sha = sha;
-
-  const res = await fetch(apiUrl, {
-    method: "PUT",
-    headers: {
-      "Authorization": `Bearer ${token}`,
-      "Accept": "application/vnd.github+json",
-      "Content-Type": "application/json",
+  const store = getStore(PHOTO_STORE);
+  await store.set(adminKey, buffer, {
+    metadata: {
+      contentType: contentType,
+      ext: ext,
+      updatedAt: new Date().toISOString(),
     },
-    body: JSON.stringify(body),
   });
 
-  if (!res.ok) {
-    const errText = await res.text();
-    throw new Error("GitHub upload failed: " + errText);
-  }
-
-  // Return the raw GitHub URL (works immediately, doesn't need Netlify redeploy)
-  return `https://raw.githubusercontent.com/${owner}/${repo}/main/${filePath}`;
+  // Cache-busting param so an updated photo shows immediately instead of
+  // serving a stale cached copy from the browser.
+  return "/.netlify/functions/get-photo?admin=" +
+         encodeURIComponent(adminKey) +
+         "&v=" + Date.now();
 }
 
 exports.handler = async function(event) {
@@ -94,24 +59,35 @@ exports.handler = async function(event) {
     const adminKey = (password || "").toLowerCase().trim();
 
     if (!adminKey) {
-      return { statusCode: 400, body: JSON.stringify({ error: "Missing password", success: false }) };
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ error: "Missing password", success: false }),
+      };
     }
 
-    // Upload photo if provided
+    // Upload photo first — if it fails, report it rather than silently
+    // saving text fields and pretending the whole save succeeded.
     let photoUrl = null;
     if (photoBase64) {
       try {
-        photoUrl = await uploadPhotoToGitHub(adminKey, photoBase64);
+        photoUrl = await uploadPhotoToBlobs(adminKey, photoBase64);
       } catch (e) {
         console.error("Photo upload error:", e.message);
-        // Continue saving text fields even if photo fails
+        return {
+          statusCode: 200,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            success: false,
+            error: "Photo upload failed: " + e.message,
+            photoError: e.message,
+          }),
+        };
       }
     }
 
     const sheets = await getSheets();
     const spreadsheetId = process.env.GOOGLE_SHEET_ID;
 
-    // Ensure Members tab exists
     let rows = [];
     try {
       const response = await sheets.spreadsheets.values.get({
@@ -153,7 +129,6 @@ exports.handler = async function(event) {
       rows = [["admin", "bio", "photoUrl", "instagram", "soundcloud", "spotify", "track"], ...rows];
     }
 
-    // Find this admin's row
     let rowIndex = -1;
     for (let i = 1; i < rows.length; i++) {
       if (rows[i][0] && rows[i][0].toLowerCase() === adminKey) {
@@ -162,7 +137,7 @@ exports.handler = async function(event) {
       }
     }
 
-    // Preserve existing photoUrl if no new photo was uploaded
+    // Keep the existing photo link if this save didn't include a new photo
     const existingPhotoUrl = rowIndex !== -1 ? (rows[rowIndex][2] || "") : "";
     const finalPhotoUrl = photoUrl || existingPhotoUrl;
 

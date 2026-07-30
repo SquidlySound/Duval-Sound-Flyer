@@ -17,48 +17,118 @@ jobs:
         with:
           fetch-depth: 0  # full history needed for git log dates
 
-      - name: Generate flyers.json sorted by upload date (newest first)
+      - name: Sanitize filenames and regenerate flyers.json
         run: |
-          python3 -c "
-          import os, json, subprocess
+          python3 << 'PYEOF'
+          import os, re, json, subprocess
 
-          flyers_dir = 'flyers'
-          supported = {'.png', '.jpg', '.jpeg', '.gif', '.webp', '.mp4', '.webm', '.mov'}
+          FOLDER    = 'flyers'
+          MANIFEST  = 'flyers.json'
+          SUPPORTED = {'.png', '.jpg', '.jpeg', '.gif', '.webp', '.mp4', '.webm', '.mov'}
 
-          if not os.path.isdir(flyers_dir):
-              files = []
-          else:
-              files_with_dates = []
-              for f in os.listdir(flyers_dir):
-                  if os.path.splitext(f)[1].lower() not in supported:
-                      continue
-                  filepath = os.path.join(flyers_dir, f)
-                  # Get the date this file was first committed to git
-                  result = subprocess.run(
-                      ['git', 'log', '--follow', '--format=%aI', '--', filepath],
-                      capture_output=True, text=True
-                  )
-                  dates = result.stdout.strip().split('\n')
-                  # Last line = first commit date (oldest), first line = most recent commit
-                  first_committed = dates[-1] if dates and dates[-1] else '1970-01-01T00:00:00+00:00'
-                  files_with_dates.append((f, first_committed))
+          def sanitize(name):
+              base, ext = os.path.splitext(name)
+              ext = ext.lower()
+              if ext == '.jpeg':
+                  ext = '.jpg'
 
-              # Sort by first commit date — newest upload first
-              files_with_dates.sort(key=lambda x: x[1], reverse=True)
-              files = [f for f, _ in files_with_dates]
+              # Preserve a leading YYYY-MM-DD prefix if you added one manually
+              date_prefix = ''
+              m = re.match(r'^(\d{4}-\d{2}-\d{2})[_\-\s]*(.*)$', base)
+              if m:
+                  date_prefix = m.group(1) + '_'
+                  base = m.group(2)
 
-          with open('flyers.json', 'w') as out:
+              base = base.lower()
+              base = re.sub(r'[\s_]+', '-', base)       # spaces/underscores -> hyphen
+              base = re.sub(r'[^a-z0-9\-]', '', base)   # strip everything else
+              base = re.sub(r'-{2,}', '-', base)        # collapse repeats
+              base = base.strip('-')
+              if not base:
+                  base = 'flyer'
+              return date_prefix + base + ext
+
+          if not os.path.isdir(FOLDER):
+              with open(MANIFEST, 'w') as out:
+                  json.dump([], out, indent=2)
+              print('No ' + FOLDER + '/ folder - wrote empty manifest')
+              raise SystemExit(0)
+
+          # ---- PASS 1: rename anything with a messy filename ----
+          # git mv preserves binary content exactly, unlike renaming in the
+          # GitHub web editor (which corrupts images).
+          existing = [f for f in os.listdir(FOLDER)
+                      if os.path.splitext(f)[1].lower() in SUPPORTED]
+          used = set()
+          renames = 0
+          # Maps new name -> original name, so PASS 2 can still look up git
+          # history (the rename isn't committed yet, so the new path has none)
+          original_of = {}
+
+          # Reserve names that are already clean so we don't collide with them
+          for f in existing:
+              if sanitize(f) == f:
+                  used.add(f)
+
+          for f in sorted(existing):
+              clean = sanitize(f)
+              if clean == f:
+                  continue
+              # Resolve collisions by appending -2, -3, ...
+              if clean in used:
+                  b, e = os.path.splitext(clean)
+                  i = 2
+                  while (b + '-' + str(i) + e) in used:
+                      i += 1
+                  clean = b + '-' + str(i) + e
+              used.add(clean)
+              original_of[clean] = f
+              subprocess.run(['git', 'mv', os.path.join(FOLDER, f),
+                                           os.path.join(FOLDER, clean)], check=True)
+              print('Renamed: ' + f + '  ->  ' + clean)
+              renames += 1
+
+          if renames == 0:
+              print('All filenames already clean')
+
+          # ---- PASS 2: build the manifest, newest first ----
+          # A YYYY-MM-DD filename prefix (the event date) wins if present.
+          # Otherwise falls back to when the file was first committed.
+          files = [f for f in os.listdir(FOLDER)
+                   if os.path.splitext(f)[1].lower() in SUPPORTED]
+
+          def sort_key(fname):
+              m = re.match(r'^(\d{4}-\d{2}-\d{2})', fname)
+              if m:
+                  return m.group(1) + 'T23:59:59+00:00'
+              # Look up history under the pre-rename name if we just renamed it
+              lookup = original_of.get(fname, fname)
+              r = subprocess.run(
+                  ['git', 'log', '--follow', '--format=%aI', '--',
+                   os.path.join(FOLDER, lookup)],
+                  capture_output=True, text=True)
+              dates = [d for d in r.stdout.strip().split('\n') if d]
+              if dates:
+                  return dates[-1]
+              # Brand new file with no committed history yet - treat as "now"
+              return subprocess.run(['date', '-u', '+%Y-%m-%dT%H:%M:%S+00:00'],
+                                    capture_output=True, text=True).stdout.strip()
+
+          files.sort(key=sort_key, reverse=True)
+
+          with open(MANIFEST, 'w') as out:
               json.dump(files, out, indent=2)
 
-          print('Generated flyers.json (' + str(len(files)) + ' files, newest first):')
+          print('')
+          print('Generated ' + MANIFEST + ' (' + str(len(files)) + ' files, newest first):')
           for f in files:
               print('  ' + f)
-          "
+          PYEOF
 
-      - name: Commit flyers.json if changed
+      - name: Commit changes
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add flyers.json
-          git diff --staged --quiet || git commit -m "Auto-update flyers.json (sorted by upload date)"
+          git add -A flyers flyers.json
+          git diff --staged --quiet || git commit -m "Auto: sanitize flyer filenames + update flyers.json"
           git push

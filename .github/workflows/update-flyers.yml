@@ -17,6 +17,149 @@ jobs:
         with:
           fetch-depth: 0  # full history needed for git log dates
 
+      - name: AI-name new flyers from date and lineup
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          AI_FOLDER: flyers
+          # Haiku is the cheapest model and handles clean flyer text fine.
+          # If it starts misreading stylised lineups, override without editing
+          # this file: repo Settings > Secrets and variables > Actions >
+          # Variables > new variable AI_MODEL = claude-sonnet-5
+          AI_MODEL: ${{ vars.AI_MODEL || 'claude-haiku-4-5-20251001' }}
+        run: |
+          cat > /tmp/ai_rename.py << 'AIEOF'
+          #!/usr/bin/env python3
+          """
+          Reads event flyers with Claude's vision API and renames them
+            YYYY-MM-DD_dj-one-dj-two.ext
+          using the date and performer names printed on the flyer.
+
+          Fail-safe by design: no API key, an API error, a video file, or an unreadable
+          flyer all just leave the file alone for the normal sanitize step to handle.
+          Never blocks the workflow.
+          """
+          import os, re, json, base64, subprocess, sys, urllib.request, urllib.error
+          from datetime import date
+
+          FOLDER   = os.environ.get("AI_FOLDER", "flyers")
+          API_KEY  = os.environ.get("ANTHROPIC_API_KEY", "").strip()
+          MODEL    = os.environ.get("AI_MODEL", "claude-sonnet-5")
+          IMAGE_EXT = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+                       ".gif": "image/gif", ".webp": "image/webp"}
+          MAX_BYTES = 4 * 1024 * 1024   # skip very large images; API has request limits
+
+          PROMPT = (
+              "This is a flyer for a music event. Today's date is {today}.\n\n"
+              "Extract two things:\n"
+              "1. The date of the event. If the year is not printed, infer the most likely "
+              "year based on today's date (events are usually upcoming, not in the past).\n"
+              "2. The names of the performers, DJs, or artists billed on the flyer. "
+              "Ignore venue names, promoter names, sponsors, and ticket vendors.\n\n"
+              "Respond with ONLY valid JSON and nothing else:\n"
+              '{{"date": "YYYY-MM-DD", "performers": ["name one", "name two"]}}\n\n'
+              'If you cannot determine the date with reasonable confidence, use null for it. '
+              'If no performers are legible, use an empty array.'
+          )
+
+          def slug(text):
+              t = text.lower()
+              t = re.sub(r"[\s_]+", "-", t)
+              t = re.sub(r"[^a-z0-9\-]", "", t)
+              t = re.sub(r"-{2,}", "-", t)
+              return t.strip("-")
+
+          def ask_claude(img_bytes, media_type):
+              body = json.dumps({
+                  "model": MODEL,
+                  "max_tokens": 400,
+                  "messages": [{
+                      "role": "user",
+                      "content": [
+                          {"type": "image", "source": {
+                              "type": "base64", "media_type": media_type,
+                              "data": base64.b64encode(img_bytes).decode()}},
+                          {"type": "text", "text": PROMPT.format(today=date.today().isoformat())},
+                      ],
+                  }],
+              }).encode()
+
+              req = urllib.request.Request(
+                  "https://api.anthropic.com/v1/messages",
+                  data=body,
+                  headers={"content-type": "application/json",
+                           "x-api-key": API_KEY,
+                           "anthropic-version": "2023-06-01"},
+              )
+              with urllib.request.urlopen(req, timeout=90) as r:
+                  data = json.loads(r.read().decode())
+
+              text = "".join(b.get("text", "") for b in data.get("content", [])
+                             if b.get("type") == "text").strip()
+              text = re.sub(r"^```(?:json)?|```$", "", text, flags=re.M).strip()
+              return json.loads(text)
+
+          def build_name(info, ext):
+              d = info.get("date")
+              if d and not re.match(r"^\d{4}-\d{2}-\d{2}$", str(d)):
+                  d = None
+              performers = [slug(p) for p in (info.get("performers") or []) if slug(p)]
+              performers = performers[:4]           # keep filenames sane
+              stem = "-".join(performers) if performers else "event"
+              stem = stem[:70]
+              return (d + "_" + stem + ext) if d else None
+
+          def main():
+              if not API_KEY:
+                  print("No ANTHROPIC_API_KEY set - skipping AI naming")
+                  return
+              if not os.path.isdir(FOLDER):
+                  return
+
+              used = set(os.listdir(FOLDER))
+              for fname in sorted(os.listdir(FOLDER)):
+                  ext = os.path.splitext(fname)[1].lower()
+                  if ext == ".jpeg":
+                      ext = ".jpg"
+                  if ext not in IMAGE_EXT:
+                      continue                                   # videos etc - skip
+                  if re.match(r"^\d{4}-\d{2}-\d{2}_", fname):
+                      continue                                   # already named - skip
+                  path = os.path.join(FOLDER, fname)
+                  if os.path.getsize(path) > MAX_BYTES:
+                      print("Skip (too large for API): " + fname)
+                      continue
+
+                  try:
+                      info = ask_claude(open(path, "rb").read(), IMAGE_EXT[ext])
+                  except Exception as e:
+                      print("AI read failed for " + fname + ": " + str(e)[:160])
+                      continue
+
+                  newname = build_name(info, ext)
+                  if not newname:
+                      print("No confident date for " + fname + " - leaving as is")
+                      continue
+                  if newname == fname or newname in used:
+                      b, e = os.path.splitext(newname)
+                      i = 2
+                      while (b + "-" + str(i) + e) in used:
+                          i += 1
+                      newname = b + "-" + str(i) + e
+
+                  try:
+                      subprocess.run(["git", "mv", path, os.path.join(FOLDER, newname)], check=True)
+                      used.discard(fname); used.add(newname)
+                      print("AI renamed: " + fname + "  ->  " + newname
+                            + "   (performers: " + ", ".join(info.get("performers") or []) + ")")
+                  except subprocess.CalledProcessError as e:
+                      print("git mv failed for " + fname + ": " + str(e))
+
+          if __name__ == "__main__":
+              main()
+
+          AIEOF
+          python3 /tmp/ai_rename.py
+
       - name: Sanitize filenames and regenerate flyers.json
         run: |
           python3 << 'PYEOF'

@@ -1890,16 +1890,21 @@
         btn.textContent = "SAVE PROFILE";
         btn.disabled = false;
         if (data.success) {
-          statusEl.textContent = "✓ Profile saved";
+          statusEl.textContent = "✓ Profile saved" + (photoBase64 ? " (photo uploaded)" : "");
           statusEl.className = "ok";
           statusEl.style.display = "block";
           selectedPhotoFile = null;
           document.getElementById("profile-photo-status").textContent = "";
           setTimeout(function(){ statusEl.style.display = "none"; }, 3000);
         } else {
+          // Photo-specific failures stay visible longer and are more detailed,
+          // since silently losing a photo upload is the most confusing failure mode
           statusEl.textContent = "✗ " + (data.error || "Save failed");
           statusEl.className = "err";
           statusEl.style.display = "block";
+          if (data.photoError) {
+            document.getElementById("profile-photo-status").textContent = "✗ Photo not saved — try again or check admin panel setup";
+          }
         }
       })
       .catch(function() {

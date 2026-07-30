@@ -2,6 +2,7 @@
   "name": "duval-sound-flyer",
   "version": "1.0.0",
   "dependencies": {
-    "googleapis": "^140.0.0"
+    "googleapis": "^140.0.0",
+    "@netlify/blobs": "^8.1.0"
   }
 }

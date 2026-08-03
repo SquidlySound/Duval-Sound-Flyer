@@ -40,6 +40,7 @@
   ══════════════════════════════════════ */
   #lock-screen {
     position: fixed; inset: 0;
+    z-index: 30;
     display: flex; flex-direction: column;
     align-items: center; justify-content: flex-end;
     padding: 0 1.5rem max(4rem, env(safe-area-inset-bottom, 2rem));
@@ -134,6 +135,7 @@
   ══════════════════════════════════════ */
   #flyer-screen {
     display: none;
+    z-index: 4;
     position: fixed; inset: 0;
     flex-direction: column; align-items: center;
     padding: 0;
@@ -160,7 +162,7 @@
     transition: box-shadow 1.2s;
   }
   #flyer-bg {
-    position: fixed; inset: 0; z-index: -1;
+    position: fixed; inset: 0; z-index: 0;
     overflow: hidden;
     transition: opacity 0.8s ease;
   }
@@ -174,13 +176,13 @@
   }
   #skyline-canvas { position:fixed; inset:0; width:100%; height:100%; pointer-events:none; z-index:2; opacity:0; transition:opacity 1.8s; }
   #flyer-vcr { position:fixed; inset:0; width:100%; height:100%; pointer-events:none; z-index:3; opacity:0; }
-  .flyer-scanlines { position:fixed; inset:0; background:repeating-linear-gradient(to bottom,transparent 0px,transparent 3px,rgba(0,0,0,0.12) 3px,rgba(0,0,0,0.12) 4px); pointer-events:none; z-index:3; }
-  .flyer-bar { position:fixed; left:0; right:0; height:2px; background:var(--white); opacity:0; pointer-events:none; z-index:4; }
+  .flyer-scanlines { position:fixed; inset:0; background:repeating-linear-gradient(to bottom,transparent 0px,transparent 3px,rgba(0,0,0,0.12) 3px,rgba(0,0,0,0.12) 4px); pointer-events:none; z-index:1; }
+  .flyer-bar { position:fixed; left:0; right:0; height:2px; background:var(--white); opacity:0; pointer-events:none; z-index:3; }
   /* Ghost flash overlay images */
   .ghost-flash {
     position: fixed;
     pointer-events: none;
-    z-index: 100;
+    z-index: 2;
     opacity: 0;
     display: none;
     transform-origin: center center;
@@ -198,7 +200,7 @@
     object-fit: contain;
   }
 
-    .flyer-vignette { position:fixed; inset:0; background:radial-gradient(ellipse at center,transparent 25%,rgba(0,0,0,0.7) 100%); pointer-events:none; z-index:5; }
+    .flyer-vignette { position:fixed; inset:0; background:radial-gradient(ellipse at center,transparent 25%,rgba(0,0,0,0.7) 100%); pointer-events:none; z-index:4; }
   .access-badge {
     position:relative; z-index:10;
     font-size:0.6rem; letter-spacing:0.3em;
@@ -302,6 +304,7 @@
   #admin-screen {
     display: none;
     position: fixed; inset: 0;
+    z-index: 30;
     flex-direction: column; align-items: center;
     padding: 3rem 1.5rem max(4rem, env(safe-area-inset-bottom, 2rem));
     overflow-y: auto; overflow-x: hidden;
@@ -991,18 +994,56 @@
   #archive-status.ok  { color: #2ecc71; display: block; }
   #archive-status.err { color: #e63329; display: block; }
 
+
+  /* ══ CRT LAYER STACK ══
+     Sibling containers of #flyer-screen, deliberately OUTSIDE it: that element
+     has perspective:1200px, which makes position:fixed children anchor to it
+     instead of the viewport (so they scrolled with the page).
+
+     Front-to-back order:
+       crt-back   0  -> blobs, mesh, skyline, VCR static
+       flyer-screen 4 -> flyers + all page content
+       crt-front  5  -> scanlines, ghosts, glitch bars, vignette   */
+  #crt-back, #crt-front {
+    position: fixed; inset: 0;
+    pointer-events: none;          /* clicks must reach the content beneath */
+    display: none;                 /* only while the flyer screen is up */
+  }
+  body.flyer-active #crt-back,
+  body.flyer-active #crt-front { display: block; }
+  #crt-back  { z-index: 0; }
+  #crt-front { z-index: 5; }
+
+  /* mesh lost its inline style when it moved containers */
+  #flyer-mesh {
+    position: fixed; inset: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    z-index: 1;
+    opacity: 0;
+    transition: opacity 1.4s;
+    mix-blend-mode: color-dodge;
+  }
+
 </style>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
 </head>
 <body>
 
 <!-- ── LOCK SCREEN ── -->
-<!-- Fixed background layers — sits before everything so position:fixed
-     anchors to the real viewport, not any perspective-transformed ancestor.
-     z-index:-1 guarantees it never paints over the lock screen or any UI. -->
-<div id="flyer-bg">
-  <canvas id="flyer-bg-canvas"></canvas>
-  <img id="flyer-bg-img" alt="" crossorigin="anonymous">
+<!-- ══ CRT BACK LAYERS ══ behind the page content.
+     These live outside #flyer-screen on purpose: #flyer-screen has
+     perspective:1200px, and a position:fixed element inside a
+     perspective-transformed parent anchors to that parent, not the
+     viewport — which made the whole CRT effect scroll with the flyers. -->
+<div id="crt-back">
+  <div id="flyer-bg">
+    <canvas id="flyer-bg-canvas"></canvas>
+    <img id="flyer-bg-img" alt="" crossorigin="anonymous">
+  </div>
+  <canvas id="flyer-mesh"></canvas>
+  <canvas id="skyline-canvas"></canvas>
+  <canvas id="flyer-vcr"></canvas>
 </div>
 
 <div id="lock-screen">
@@ -1040,22 +1081,6 @@
     <button class="tab-btn" data-tab="dj-apply" onclick="switchTab('dj-apply')">DJ Apply</button>
     <button class="tab-btn" data-tab="members" onclick="switchTab('members')">Members</button>
   </div>
-
-  <!-- Fixed background layers -->
-  <div id="flyer-bg">
-    <canvas id="flyer-bg-canvas"></canvas>
-    <img id="flyer-bg-img" alt="" crossorigin="anonymous">
-  </div>
-  <canvas id="flyer-mesh" style="position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:1;opacity:0;transition:opacity 1.4s;mix-blend-mode:color-dodge;"></canvas>
-  <canvas id="skyline-canvas"></canvas>
-  <canvas id="flyer-vcr"></canvas>
-  <div class="flyer-scanlines"></div>
-  <div class="flyer-bar" id="fbar1"></div>
-  <div class="flyer-bar" id="fbar2"></div>
-  <div class="flyer-vignette"></div>
-  <!-- Ghost flash canvases -->
-  <canvas id="ghost-ds-canvas" class="ghost-flash" style="width:clamp(120px,22vw,280px);height:clamp(120px,22vw,280px);"></canvas>
-  <canvas id="ghost-squid-canvas" class="ghost-flash" style="width:clamp(100px,18vw,240px);height:clamp(100px,18vw,240px);"></canvas>
 
   <!-- Scrollable sections built by JS -->
   <div id="tab-flyers" class="tab-panel active">
@@ -1110,6 +1135,16 @@
     <button class="lightbox-close" onclick="event.stopPropagation(); closeLightbox()">&#10005;</button>
     <div id="lightbox-content"></div>
   </div>
+</div>
+
+<!-- ══ CRT FRONT LAYERS ══ the glass of the tube, painted over the content. -->
+<div id="crt-front">
+  <div class="flyer-scanlines"></div>
+  <canvas id="ghost-ds-canvas" class="ghost-flash" style="width:clamp(120px,22vw,280px);height:clamp(120px,22vw,280px);"></canvas>
+  <canvas id="ghost-squid-canvas" class="ghost-flash" style="width:clamp(100px,18vw,240px);height:clamp(100px,18vw,240px);"></canvas>
+  <div class="flyer-bar" id="fbar1"></div>
+  <div class="flyer-bar" id="fbar2"></div>
+  <div class="flyer-vignette"></div>
 </div>
 
 <!-- ── ADMIN SCREEN ── -->
@@ -1806,6 +1841,7 @@
         setTimeout(function() {
           document.getElementById("lock-screen").style.display = "none";
           document.getElementById("flyer-screen").style.display = "flex";
+          document.body.classList.add("flyer-active");
           
           startFlyerGlitch();
         }, 400);
@@ -1830,6 +1866,7 @@
     });
   }
   function returnToLock() {
+    document.body.classList.remove("flyer-active");
     skyRunning = false;
     stopGhostFlashes();
     stopBgAnimation();
@@ -1853,6 +1890,7 @@
   function logout() {
     document.getElementById("admin-screen").style.display  = "none";
     document.getElementById("flyer-screen").style.display  = "none";
+    document.body.classList.remove("flyer-active");
     document.getElementById("lock-screen").style.display   = "flex";
     document.getElementById("lock-screen").classList.remove("fade-out");
     document.getElementById("password-input").value = "";
@@ -2325,7 +2363,7 @@
     var gridH = Math.max(2, Math.round(b.h * 14));
     var gridW = Math.max(2, Math.round(b.w * 12));
     var gridD = 3;
-    var alpha = 0.5;
+    var alpha = 0.78;
 
     // Front face (bz0): corners top-left, top-right, bot-right, bot-left
     meshFace(
@@ -2411,14 +2449,14 @@
     // ── GROUND GRID (PS2 floor plane) ──────────────────────────
     var GW = 520, GD = 520, GY = 40;
     var GCols = 22, GRows = 18;
-    var gA = 0.12;
+    var gA = 0.30;
     for (var i = 0; i <= GCols; i++) {
       var gx = -GW/2 + (i/GCols)*GW;
-      line3D(gx, GY, -GD/2, gx, GY, GD/2, cam, gA, 0.5);
+      line3D(gx, GY, -GD/2, gx, GY, GD/2, cam, gA, 0.8);
     }
     for (var j = 0; j <= GRows; j++) {
       var gz = -GD/2 + (j/GRows)*GD;
-      line3D(-GW/2, GY, gz, GW/2, GY, gz, cam, gA, 0.5);
+      line3D(-GW/2, GY, gz, GW/2, GY, gz, cam, gA, 0.8);
     }
 
     // ── BUILDINGS as PS2 grid mesh boxes ───────────────────────

@@ -243,19 +243,6 @@
   }
 
   /* Ghost clone layers behind the poster */
-  .flyer-ghosts {
-    position: absolute;
-    inset: 0;
-    z-index: -1;
-    pointer-events: none;
-  }
-  .flyer-ghost {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    opacity: 0;
-  }
-  .flyer-ghost img { width: 100%; display: block; }
 
   /* Main poster container */
   .flyer-container {
@@ -546,7 +533,7 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 5.5rem 1rem 3rem;
+    padding: var(--tabbar-clear, 5.5rem) 1rem 3rem;
     min-height: 100vh;
     scroll-snap-align: start;
     scroll-snap-stop: normal;
@@ -704,8 +691,6 @@
   @media (max-width: 480px) {
     #main-tabbar { gap: 0.2rem; padding: 0.6rem 0.5rem; }
     .tab-btn { font-size: 0.48rem; padding: 0.35rem 0.5rem; }
-    .tab-panel { padding-top: 4.8rem; }
-    .flyer-section { padding-top: 4.8rem; }
     .archive-grid, .members-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); }
   }
   @media (min-width: 900px) {
@@ -720,7 +705,7 @@
     z-index: 10;
     width: 100%;
     min-height: 100vh;
-    padding-top: 5.5rem; /* clears the fixed tab bar */
+    padding-top: var(--tabbar-clear, 5.5rem); /* measured from the real tab bar */
     box-sizing: border-box;
   }
   .tab-panel.active { display: block; }
@@ -1025,6 +1010,79 @@
     mix-blend-mode: color-dodge;
   }
 
+
+  /* ══ BIG LINK BUTTONS (merch / discord) ══ */
+  .big-link {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    width: 100%;
+    max-width: 420px;
+    margin: 0 auto;
+    padding: 2.1rem 1.5rem;
+    text-decoration: none;
+    text-align: center;
+    border: 1px solid var(--console-border, rgba(245,240,232,0.28));
+    background: var(--console-bg, rgba(0,0,0,0.55));
+    backdrop-filter: blur(8px);
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.25s, transform 0.25s, box-shadow 0.25s;
+  }
+  .big-link:hover {
+    border-color: var(--theme-primary, #f5f0e8);
+    transform: translateY(-2px);
+    box-shadow: 0 0 34px var(--theme-glow, rgba(245,240,232,0.16));
+  }
+  .big-link:active { transform: translateY(0); }
+  .big-link-title {
+    font-family: 'Bebas Neue','Arial Narrow',Impact,sans-serif;
+    font-size: clamp(1.7rem, 7vw, 2.6rem);
+    letter-spacing: 0.16em;
+    line-height: 1;
+    color: var(--theme-primary, #f5f0e8);
+    text-shadow: 0 0 18px var(--theme-glow, rgba(245,240,232,0.28));
+    transition: color 1.2s, text-shadow 1.2s;
+  }
+  .big-link-sub {
+    font-family: 'Space Mono','Courier New',monospace;
+    font-size: 0.58rem;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: #7d7d7d;
+  }
+  /* Sheen that sweeps across on hover */
+  .big-link::after {
+    content: "";
+    position: absolute;
+    top: 0; left: -60%;
+    width: 45%; height: 100%;
+    background: linear-gradient(100deg, transparent, rgba(255,255,255,0.10), transparent);
+    transform: skewX(-18deg);
+    transition: left 0.6s ease;
+    pointer-events: none;
+  }
+  .big-link:hover::after { left: 115%; }
+
+  /* Discord sits under the member grid as a secondary action */
+  .link-block {
+    margin-top: 2.6rem;
+    padding-top: 1.8rem;
+    border-top: 1px solid #1e1e1e;
+  }
+  .link-block-label {
+    font-size: 0.55rem;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--console-accent, #666);
+    text-align: center;
+    margin-bottom: 1rem;
+  }
+  .discord-link .big-link-title { font-size: clamp(1.3rem, 5.5vw, 1.9rem); }
+  .discord-link { padding: 1.5rem 1.5rem; }
+
 </style>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
 </head>
@@ -1074,14 +1132,6 @@
 
 <!-- ── FLYER SCREEN ── -->
 <div id="flyer-screen">
-  <!-- Tab navigation -->
-  <div id="main-tabbar">
-    <button class="tab-btn active" data-tab="flyers" onclick="switchTab('flyers')">Flyers</button>
-    <button class="tab-btn" data-tab="archive" onclick="switchTab('archive')">Past Shows</button>
-    <button class="tab-btn" data-tab="dj-apply" onclick="switchTab('dj-apply')">DJ Apply</button>
-    <button class="tab-btn" data-tab="members" onclick="switchTab('members')">Members</button>
-  </div>
-
   <!-- Scrollable sections built by JS -->
   <div id="tab-flyers" class="tab-panel active">
     <div id="flyer-sections"></div>
@@ -1127,17 +1177,46 @@
     <div class="tab-content-inner">
       <h2 class="tab-title">MEET THE MEMBERS</h2>
       <div id="members-grid" class="members-grid"></div>
+
+      <div class="link-block">
+        <div class="link-block-label">// Join the collective</div>
+        <a class="big-link discord-link" href="https://discord.gg/8beXT8hHd" target="_blank" rel="noopener noreferrer">
+          <span class="big-link-title">DISCORD</span>
+          <span class="big-link-sub">Link up with everyone &#8599;</span>
+        </a>
+      </div>
     </div>
   </div>
 
-  <!-- Archive lightbox -->
+  <div id="tab-merch" class="tab-panel">
+    <div class="tab-content-inner">
+      <h2 class="tab-title">MERCH</h2>
+      <p class="tab-subtitle">Wear it loud.</p>
+      <a class="big-link merch-link" href="https://streamlabs.com/duvalsound/merch" target="_blank" rel="noopener noreferrer">
+        <span class="big-link-title">SHOP THE STORE</span>
+        <span class="big-link-sub">Opens in a new tab &#8599;</span>
+      </a>
+    </div>
+  </div>
+
+</div>
+
+<!-- ══ CRT FRONT LAYERS ══ the glass of the tube, painted over the content. -->
+  <!-- Tab navigation -->
+  <div id="main-tabbar">
+    <button class="tab-btn active" data-tab="flyers" onclick="switchTab('flyers')">Flyers</button>
+    <button class="tab-btn" data-tab="archive" onclick="switchTab('archive')">Past Shows</button>
+    <button class="tab-btn" data-tab="dj-apply" onclick="switchTab('dj-apply')">DJ Apply</button>
+    <button class="tab-btn" data-tab="members" onclick="switchTab('members')">Members</button>
+    <button class="tab-btn" data-tab="merch" onclick="switchTab('merch')">Merch</button>
+  </div>
+
+<!-- Archive lightbox -->
   <div id="archive-lightbox" onclick="closeLightbox()">
     <button class="lightbox-close" onclick="event.stopPropagation(); closeLightbox()">&#10005;</button>
     <div id="lightbox-content"></div>
   </div>
-</div>
 
-<!-- ══ CRT FRONT LAYERS ══ the glass of the tube, painted over the content. -->
 <div id="crt-front">
   <div class="flyer-scanlines"></div>
   <canvas id="ghost-ds-canvas" class="ghost-flash" style="width:clamp(120px,22vw,280px);height:clamp(120px,22vw,280px);"></canvas>
@@ -1424,18 +1503,6 @@
       var flyerWrap = document.createElement("div");
       flyerWrap.className = "flyer-container";
 
-      var ghosts = document.createElement("div");
-      ghosts.className = "flyer-ghosts";
-      ghosts.id = "flyer-ghosts-" + i;
-      for (var g = 0; g < 3; g++) {
-        var gd = document.createElement("div");
-        gd.className = "flyer-ghost";
-        var gi = document.createElement("img");
-        gi.src = src; gi.alt = "";
-        gd.appendChild(gi);
-        ghosts.appendChild(gd);
-      }
-
       var isVideo = /\.(mp4|webm|mov)$/i.test(src);
       var media;
       if (isVideo) {
@@ -1456,7 +1523,6 @@
         img.alt = "Event Flyer " + (i+1);
         img.id = "flyer-img-" + i;
         img.style.cssText = "width:100%;display:block;animation:vcr-distort 5s 2s infinite;";
-        flyerWrap.appendChild(ghosts);
         flyerWrap.appendChild(img);
       }
 
@@ -1842,6 +1908,7 @@
           document.getElementById("lock-screen").style.display = "none";
           document.getElementById("flyer-screen").style.display = "flex";
           document.body.classList.add("flyer-active");
+          syncTabbarClearance();
           
           startFlyerGlitch();
         }, 400);
@@ -2493,22 +2560,66 @@
   var ghostsRunning = false;
 
   // Remove white/near-white background from image onto canvas
+  // Knocks the background out of the ghost images so they read as floating
+  // artwork rather than a glowing rectangle.
+  //
+  // The old version assumed a WHITE background and stripped anything above a
+  // fixed threshold. If the source art has a dark or coloured background, most
+  // pixels survive — and with mix-blend-mode:screen + brightness(1.5) the
+  // leftover field shows up as a visible square that jumps around the page.
+  //
+  // This samples the actual corner pixels to learn the background colour, then
+  // removes pixels near it, whatever it happens to be.
   function removeWhiteBackground(img, canvas, threshold) {
-    threshold = threshold || 200;
     canvas.width  = img.naturalWidth  || img.width  || 300;
     canvas.height = img.naturalHeight || img.height || 300;
     var ctx = canvas.getContext("2d");
     ctx.drawImage(img, 0, 0);
-    var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    var data = imageData.data;
-    for (var i = 0; i < data.length; i += 4) {
-      var r = data[i], g = data[i+1], b = data[i+2];
-      if (r > threshold && g > threshold && b > threshold) {
-        data[i+3] = 0; // transparent
-      } else if (r > threshold - 30 && g > threshold - 30 && b > threshold - 30) {
-        // Semi-transparent edge
-        var dist = Math.max(r, g, b) - (threshold - 30);
-        data[i+3] = Math.max(0, 255 - dist * 8);
+
+    var W = canvas.width, H = canvas.height;
+    var imageData, data;
+    try {
+      imageData = ctx.getImageData(0, 0, W, H);
+      data = imageData.data;
+    } catch (e) {
+      return; // tainted canvas — leave the image as-is rather than crash
+    }
+
+    function px(x, y) {
+      var o = (y * W + x) * 4;
+      return [data[o], data[o+1], data[o+2]];
+    }
+
+    // Learn the background from the four corners (inset slightly to dodge
+    // any stray border pixel). Median per channel resists one odd corner.
+    var inset = Math.max(1, Math.floor(Math.min(W, H) * 0.02));
+    var corners = [
+      px(inset, inset), px(W - 1 - inset, inset),
+      px(inset, H - 1 - inset), px(W - 1 - inset, H - 1 - inset)
+    ];
+    var bg = [0, 1, 2].map(function(ch) {
+      var vals = corners.map(function(cn) { return cn[ch]; }).sort(function(a, b) { return a - b; });
+      return (vals[1] + vals[2]) / 2;
+    });
+
+    // Corners disagreeing badly means there's no flat background to remove.
+    // Bail rather than punch holes through the artwork.
+    var spread = 0;
+    corners.forEach(function(cn) {
+      spread = Math.max(spread,
+        Math.abs(cn[0]-bg[0]) + Math.abs(cn[1]-bg[1]) + Math.abs(cn[2]-bg[2]));
+    });
+    if (spread > 120) return;
+
+    var tol  = 60;   // fully transparent within this distance of the bg colour
+    var soft = 110;  // feathered out to here, so edges don't look cut out
+
+    for (var p = 0; p < data.length; p += 4) {
+      var d = Math.abs(data[p]-bg[0]) + Math.abs(data[p+1]-bg[1]) + Math.abs(data[p+2]-bg[2]);
+      if (d <= tol) {
+        data[p+3] = 0;
+      } else if (d < soft) {
+        data[p+3] = Math.round(data[p+3] * ((d - tol) / (soft - tol)));
       }
     }
     ctx.putImageData(imageData, 0, 0);
@@ -2641,7 +2752,8 @@
       return;
     }
     var flyerFile = (FLYERS[idx] || "").replace("flyers/", "");
-    fetch("/.netlify/functions/get-message?flyer=" + encodeURIComponent(flyerFile))
+    fetch("/.netlify/functions/get-message?flyer=" + encodeURIComponent(flyerFile) +
+          "&idx=" + idx)
       .then(function(r) { return r.json(); })
       .then(function(data) {
         if (data && data.messages !== undefined) {
@@ -2859,6 +2971,7 @@
     if (selectedSrc) updateAdminPreview(selectedSrc);
     var flyerFile = (selectedSrc || "").replace("flyers/", "");
     fetch("/.netlify/functions/get-message?flyer=" + encodeURIComponent(flyerFile) +
+          "&idx=" + (flyerNum - 1) +
           "&admin=" + encodeURIComponent(currentAdminPassword))
       .then(function(r) { return r.json(); })
       .then(function(data) {
@@ -2893,6 +3006,7 @@
       body: JSON.stringify({
         message: text,
         flyer: (FLYERS[flyerNum - 1] || "").replace("flyers/", ""),
+        idx: flyerNum - 1,
         password: currentAdminPassword
       })
     })
@@ -2932,6 +3046,7 @@
       body: JSON.stringify({
         message: "",
         flyer: (FLYERS[flyerNum - 1] || "").replace("flyers/", ""),
+        idx: flyerNum - 1,
         password: currentAdminPassword
       })
     })
@@ -3087,6 +3202,24 @@
     window.addEventListener("resize", resizeBgCanvas);
     startBgAnimation();
   }
+
+  // The gradient mesh is sized inside applyThemeColors, which only runs on a
+  // palette change — so without this it keeps stale dimensions after a resize
+  // and paints a hard-edged rectangle instead of covering the viewport.
+  function resizeMeshCanvas() {
+    var mesh = document.getElementById("flyer-mesh");
+    if (!mesh) return;
+    if (mesh.width !== window.innerWidth || mesh.height !== window.innerHeight) {
+      mesh.width  = window.innerWidth;
+      mesh.height = window.innerHeight;
+      // Repaint with the current palette rather than leaving it blank
+      if (currentFlyerSrc && paletteCache[currentFlyerSrc]) {
+        var p = paletteCache[currentFlyerSrc];
+        try { applyThemeColors(p.dom, p.acc, p.palette); } catch (e) {}
+      }
+    }
+  }
+  window.addEventListener("resize", resizeMeshCanvas);
 
   function resizeBgCanvas() {
     if (!bgCanvas) return;
@@ -3339,6 +3472,18 @@
   var currentTab = "flyers";
   var archiveLoaded = false;
   var membersLoaded = false;
+
+  // With five tabs the bar can wrap to two rows on narrow phones. Rather than
+  // guessing a padding value, measure the bar and expose it as a CSS variable
+  // so panels always clear it exactly.
+  function syncTabbarClearance() {
+    var bar = document.getElementById("main-tabbar");
+    if (!bar) return;
+    var h = bar.getBoundingClientRect().height;
+    if (!h) return;
+    document.documentElement.style.setProperty("--tabbar-clear", (h + 22) + "px");
+  }
+  window.addEventListener("resize", syncTabbarClearance);
 
   function switchTab(tabName) {
     if (tabName === currentTab) return;

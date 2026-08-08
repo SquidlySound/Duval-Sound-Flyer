@@ -661,7 +661,7 @@
     position: fixed;
     top: 0; left: 0; right: 0;
     z-index: 50;
-    display: flex;
+    display: none;                     /* only once past the lock screen */
     justify-content: center;
     flex-wrap: wrap;
     gap: 0.3rem;
@@ -996,6 +996,7 @@
   }
   body.flyer-active #crt-back,
   body.flyer-active #crt-front { display: block; }
+  body.flyer-active #main-tabbar { display: flex; }
   #crt-back  { z-index: 0; }
   #crt-front { z-index: 5; }
 
@@ -1908,7 +1909,8 @@
           document.getElementById("lock-screen").style.display = "none";
           document.getElementById("flyer-screen").style.display = "flex";
           document.body.classList.add("flyer-active");
-          syncTabbarClearance();
+          // measure next frame, once the bar is actually laid out
+          requestAnimationFrame(syncTabbarClearance);
           
           startFlyerGlitch();
         }, 400);

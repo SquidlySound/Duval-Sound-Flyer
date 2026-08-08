@@ -46,6 +46,12 @@ exports.handler = async function(event) {
     }
     const tabName = tabNameFor(flyerFile);
     const adminPw = (params.admin || "").toLowerCase().trim();
+    // Legacy fallback: tabs used to be numbered Message1, Message2... by the
+    // flyer's position in the list. If the filename-keyed tab doesn't exist
+    // yet, fall back to the old numbered one so existing messages keep working
+    // without anyone having to rename tabs in the sheet by hand.
+    const legacyIdx  = parseInt(params.idx || "", 10);
+    const legacyTab  = isNaN(legacyIdx) ? null : "Message" + (legacyIdx + 1);
 
     const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
     const auth = new google.auth.GoogleAuth({
@@ -55,23 +61,31 @@ exports.handler = async function(event) {
     const sheets = google.sheets({ version: "v4", auth });
     const spreadsheetId = process.env.GOOGLE_SHEET_ID;
 
-    let rows = [];
-    try {
-      const response = await sheets.spreadsheets.values.get({
-        spreadsheetId,
-        range: tabName + "!A:B",
-      });
-      rows = response.data.values || [];
-    } catch (e) {
-      if (e.message && e.message.includes("Unable to parse range")) {
-        // Tab doesn't exist yet — no messages posted for this flyer
-        return {
-          statusCode: 200,
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(adminPw ? { adminMessage: "" } : { messages: [] }),
-        };
+    async function readTab(name) {
+      try {
+        const response = await sheets.spreadsheets.values.get({
+          spreadsheetId,
+          range: name + "!A:B",
+        });
+        return response.data.values || [];
+      } catch (e) {
+        if (e.message && e.message.includes("Unable to parse range")) return null;
+        throw e;
       }
-      throw e;
+    }
+
+    let rows = await readTab(tabName);
+    if (rows === null && legacyTab) {
+      rows = await readTab(legacyTab);
+      if (rows) console.log("Served legacy tab " + legacyTab + " for " + flyerFile);
+    }
+    if (rows === null) {
+      // Neither tab exists — nothing posted for this flyer
+      return {
+        statusCode: 200,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(adminPw ? { adminMessage: "" } : { messages: [] }),
+      };
     }
 
     const dataRows = rows.filter(r => r[0] && r[0] !== "admin");

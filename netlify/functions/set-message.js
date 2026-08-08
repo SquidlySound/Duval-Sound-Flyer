@@ -22,7 +22,7 @@ exports.handler = async function(event) {
 
   try {
     const body = JSON.parse(event.body);
-    const { message, password, flyer } = body;
+    const { message, password, flyer, idx } = body;
     const adminKey = (password || "").toLowerCase().trim();
 
     if (!adminKey) {
@@ -55,6 +55,27 @@ exports.handler = async function(event) {
       rows = response.data.values || [];
     } catch (e) {
       if (e.message && e.message.includes("Unable to parse range")) {
+        // First save for this flyer. Tabs used to be numbered by list position
+        // (Message1, Message2...). Carry that content across so switching to
+        // filename-keyed tabs doesn't quietly drop existing messages.
+        let carried = [["admin", "message"]];
+        const legacyIdx = parseInt(idx, 10);
+        if (!isNaN(legacyIdx)) {
+          try {
+            const legacy = await sheets.spreadsheets.values.get({
+              spreadsheetId,
+              range: "Message" + (legacyIdx + 1) + "!A:B",
+            });
+            const legacyRows = (legacy.data.values || [])
+              .filter(r => r[0] && r[0] !== "admin");
+            if (legacyRows.length) {
+              carried = carried.concat(legacyRows);
+              console.log("Migrated " + legacyRows.length +
+                          " row(s) from Message" + (legacyIdx + 1) + " to " + tabName);
+            }
+          } catch (le) { /* no legacy tab — fine */ }
+        }
+
         await sheets.spreadsheets.batchUpdate({
           spreadsheetId,
           requestBody: {
@@ -63,11 +84,11 @@ exports.handler = async function(event) {
         });
         await sheets.spreadsheets.values.update({
           spreadsheetId,
-          range: tabName + "!A1:B1",
+          range: tabName + "!A1",
           valueInputOption: "RAW",
-          requestBody: { values: [["admin", "message"]] },
+          requestBody: { values: carried },
         });
-        rows = [["admin", "message"]];
+        rows = carried;
       } else {
         throw e;
       }
